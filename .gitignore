@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ignore directories with data that is not public
+Data/ID_auction_preprocessed 
+Data/Intraday_Auction
+Data/Transactions
+Data/preprocessed_dataset.csv
+# ignore the python env
+pyvenv311
+# ignore the intraday preprocessed dataset
+Data/preprocessed_continuous_intraday_prices_and_volume.db
