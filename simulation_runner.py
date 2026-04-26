@@ -1,6 +1,5 @@
-"""
-Script to run the simulation for the required configuration of distances before trading and forecast and different deliveries
-"""
+"""Runner of the forecasting simulation for all the deliveries"""
+
 import os
 import time
 import subprocess
@@ -63,11 +62,17 @@ for model in args.models:
     start = args.start_delivery
     joblist = []
     sys.stderr = open(
-        os.path.join(LOGS_DIR, f"TOTAL_SIMU_ERR_{start}_{args.end_delivery}_{model}_{args.calibration_window_len}.txt"),
+        os.path.join(
+            LOGS_DIR,
+            f"TOTAL_SIMU_ERR_{start}_{args.end_delivery}_{model}_{args.calibration_window_len}.txt",
+        ),
         "w",
     )
     sys.stdout = open(
-        os.path.join(LOGS_DIR, f"TOTAL_SIMU_LOG_{start}_{args.end_delivery}_{model}_{args.calibration_window_len}.txt"),
+        os.path.join(
+            LOGS_DIR,
+            f"TOTAL_SIMU_LOG_{start}_{args.end_delivery}_{model}_{args.calibration_window_len}.txt",
+        ),
         "w",
     )
 

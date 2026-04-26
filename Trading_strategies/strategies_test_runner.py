@@ -28,12 +28,11 @@ calibration_files = [
     "PAPER_GRADE_NO_SCENARIOS_FILTER_FROM_PICKLE_grid_search_trading_strategy_measures_False_0_bands_risk_seeking.csv",
     "PAPER_GRADE_NO_SCENARIOS_FILTER_FROM_PICKLE_grid_search_trading_strategy_measures_True_-1_bands_risk_seeking.csv",
     "PAPER_GRADE_NO_SCENARIOS_FILTER_FROM_PICKLE_grid_search_trading_strategy_measures_False_0_bands_risk_averse.csv",
-    "PAPER_GRADE_NO_SCENARIOS_FILTER_FROM_PICKLE_grid_search_trading_strategy_measures_True_-1_bands_risk_averse.csv"
+    "PAPER_GRADE_NO_SCENARIOS_FILTER_FROM_PICKLE_grid_search_trading_strategy_measures_True_-1_bands_risk_averse.csv",
 ]
 
 
 def parse_file_flags(filename):
-
     flags = {}
 
     if "False_0" in filename:
@@ -63,7 +62,6 @@ def parse_file_flags(filename):
 
 
 for file in calibration_files:
-
     print("\n" + "=" * 80)
     print(f"RUNNING MODELS FROM: {file}")
     print("=" * 80)
@@ -72,13 +70,14 @@ for file in calibration_files:
 
     weighting_type_df = df[df["weights"] == args.weighting_type]
 
-    if args.weighting_type == "_": # hack to make the simulation run for best static strategy parameters
-        weighting_type_df[['param2', 'param3']] = (
-            weighting_type_df[['param2', 'param3']]
-            .replace('_', np.nan)
-            )
-        weighting_type_df["threshold"] = 'mae'
-        weighting_type_df["weights"] = 'mae'
+    if (
+        args.weighting_type == "_"
+    ):  # hack to make the simulation run for best static strategy parameters
+        weighting_type_df[["param2", "param3"]] = weighting_type_df[
+            ["param2", "param3"]
+        ].replace("_", np.nan)
+        weighting_type_df["threshold"] = "mae"
+        weighting_type_df["weights"] = "mae"
 
     idx = weighting_type_df.groupby("model_setting")["Sortino_ratio"].idxmax()
     best_rows = weighting_type_df.loc[idx]
@@ -86,18 +85,25 @@ for file in calibration_files:
     flags = parse_file_flags(file)
 
     for _, row in best_rows.iterrows():
-
         cmd = [
             "python",
             "trading_strategies_simulation.py",
-            "--model", flags["model"],
-            "--run_type", "test",
-            "--weights_method", str(row["weights"]),
-            "--distribution_param", str(row["param2"]),
-            "--lambda_parameter", str(row["param3"]),
-            "--trust_threshold", str(row["threshold"]),
-            "--underlying_model", str(row["model_setting"]),
-            "--underlying_model_column", str(row["model"]),
+            "--model",
+            flags["model"],
+            "--run_type",
+            "test",
+            "--weights_method",
+            str(row["weights"]),
+            "--distribution_param",
+            str(row["param2"]),
+            "--lambda_parameter",
+            str(row["param3"]),
+            "--trust_threshold",
+            str(row["threshold"]),
+            "--underlying_model",
+            str(row["model_setting"]),
+            "--underlying_model_column",
+            str(row["model"]),
         ]
 
         if flags["one_sided"]:

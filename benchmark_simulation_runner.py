@@ -1,10 +1,10 @@
 """
 Script to run the simulation for the required configuration of distances before trading and forecast and different deliveries
 """
+
 import sys
 import time
 import subprocess
-import gc
 
 import sys
 import os
@@ -41,13 +41,13 @@ sys.stdout = open(
     f"TOTAL_SIMU_LOG_{start}_{args.end_delivery}_benchmark_{args.calibration_window_len}.txt",
     "w",
 )
-for shift_trade in [6]:  # delivery time - shift_trade is the trade time, 7 because we want to forecast the last interval at 35 to 30min before the delivery
-
+for shift_trade in [
+    6
+]:  # delivery time - shift_trade is the trade time, 7 because we want to forecast the last interval at 35 to 30min before the delivery
     for delivery_time in range(int(start), int(args.end_delivery)):
         trade_time = delivery_time * 3 + 8 * 12 - shift_trade
 
         for required_scenarios in required_scenarios_list:
-
             joblist.append(
                 [
                     sys.executable,
@@ -61,9 +61,9 @@ for shift_trade in [6]:  # delivery time - shift_trade is the trade time, 7 beca
                     str(args.calibration_window_len),
                     "--processes",
                     str(processes),
-                ] + [
-                    "--required_scenarios", str(required_scenarios)
-                ]*(required_scenarios is not None)
+                ]
+                + ["--required_scenarios", str(required_scenarios)]
+                * (required_scenarios is not None)
             )
 
 invoked = 0

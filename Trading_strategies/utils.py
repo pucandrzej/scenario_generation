@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 # STRATEGY QUALITY MEASURES UTILS
 ###################################################################################################################
 
+
 def rtp(pnl, best_pnl, worst_pnl, one_sided):
     """
     Compute the Relative Trading Performance (RTP).
@@ -18,7 +19,7 @@ def rtp(pnl, best_pnl, worst_pnl, one_sided):
     worst_pnl : array-like
         Worst-case PnL trajectory.
     one_sided : bool
-        If True, scales RTP between worst and best PnL.  
+        If True, scales RTP between worst and best PnL.
         If False, scales PnL by the best PnL only.
 
     Returns
@@ -27,9 +28,12 @@ def rtp(pnl, best_pnl, worst_pnl, one_sided):
         Relative trading performance.
     """
     if one_sided:
-        return (np.sum(pnl) - np.sum(worst_pnl)) / (np.sum(best_pnl) - np.sum(worst_pnl))
+        return (np.sum(pnl) - np.sum(worst_pnl)) / (
+            np.sum(best_pnl) - np.sum(worst_pnl)
+        )
     else:
         return np.sum(pnl) / np.sum(best_pnl)
+
 
 def hhi(pnl):
     """
@@ -45,11 +49,8 @@ def hhi(pnl):
     float
         HHI concentration measure (0 to 1).
     """
-    return np.sum(
-        (
-            pnl / np.sum(pnl)
-        )**2
-    )
+    return np.sum((pnl / np.sum(pnl)) ** 2)
+
 
 def gini(pnl):
     """
@@ -65,15 +66,16 @@ def gini(pnl):
     float
         Gini coefficient, between 0 and 1.
     """
-    pnl = pnl[pnl > 0]              # only positive profits
+    pnl = pnl[pnl > 0]  # only positive profits
     n = pnl.size
     if n == 0:
         return 0.0
     mean_x = np.mean(pnl)
     if mean_x == 0:
         return 0.0
-    diff_sum = np.abs(pnl[:, None] - pnl).sum() # pairwise absolute differences
+    diff_sum = np.abs(pnl[:, None] - pnl).sum()  # pairwise absolute differences
     return diff_sum / (2 * n**2 * mean_x)
+
 
 def topk_contribution(pnl, k=2016):
     """
@@ -100,11 +102,13 @@ def topk_contribution(pnl, k=2016):
 
     return topk_sum / total_profit
 
+
 def profit(pnl):
     """
     Compute total profit.
     """
     return np.sum(pnl)
+
 
 def mdd(pnl):
     """
@@ -115,6 +119,7 @@ def mdd(pnl):
     drawdown = peak - equity
     return np.max(drawdown)
 
+
 def avg_dd(pnl):
     """
     Compute average drawdown.
@@ -123,6 +128,7 @@ def avg_dd(pnl):
     peak = np.maximum.accumulate(equity)
     drawdown = peak - equity
     return np.mean(drawdown)
+
 
 def downside_std(pnl, one_sided):
     """
@@ -137,15 +143,18 @@ def downside_std(pnl, one_sided):
 
     return np.sqrt(downside_sq.mean())
 
+
 def win_rate(pnl):
     """
     Compute win rate (fraction of positive-PnL observations).
     """
-    return len(pnl[pnl > 0])/len(pnl)
+    return len(pnl[pnl > 0]) / len(pnl)
+
 
 ###################################################################################################################
 # BANDS UTILS
 ###################################################################################################################
+
 
 def calc_band(M, Y, idx, band_type):
     """
@@ -167,13 +176,14 @@ def calc_band(M, Y, idx, band_type):
     ndarray
         Band values for each time step.
     """
-    if band_type == 'upper':
-        lt = np.argsort(M)[:idx+1]
+    if band_type == "upper":
+        lt = np.argsort(M)[: idx + 1]
         B = np.max(Y[:, lt], axis=1)
-    elif band_type == 'lower':
-        lt = np.argsort(M)[::-1][:idx+1]
+    elif band_type == "lower":
+        lt = np.argsort(M)[::-1][: idx + 1]
         B = np.min(Y[:, lt], axis=1)
     return B
+
 
 def vanilla_band(Y, scp, band_type):
     """
@@ -194,9 +204,9 @@ def vanilla_band(Y, scp, band_type):
         Prediction band across time.
     """
     m = np.shape(Y)[1]
-    if band_type == 'upper':
+    if band_type == "upper":
         M = np.max(Y, axis=0)
-    elif band_type == 'lower':
+    elif band_type == "lower":
         M = np.min(Y, axis=0)
 
     if scp >= 0.5:
@@ -212,10 +222,11 @@ def vanilla_band(Y, scp, band_type):
         B2 = calc_band(M, Y, idx, band_type=band_type)
         l1, l2 = levels[idx - 1], levels[idx]
         denominator = l2 - l1
-        nominator_1 = B1*(l2 - scp)
-        nominator_2 = B2*(scp - l1)
+        nominator_1 = B1 * (l2 - scp)
+        nominator_2 = B2 * (scp - l1)
         B = (nominator_1 + nominator_2) / denominator
     return B
+
 
 def calc_weighted_band(Y, idx, band_type):
     """
@@ -234,11 +245,12 @@ def calc_weighted_band(Y, idx, band_type):
     ndarray
         Weighted prediction band.
     """
-    if band_type == 'upper':
-        B = np.max(Y[:, :idx+1], axis=1)
-    elif band_type == 'lower':
-        B = np.min(Y[:, :idx+1], axis=1)
+    if band_type == "upper":
+        B = np.max(Y[:, : idx + 1], axis=1)
+    elif band_type == "lower":
+        B = np.min(Y[:, : idx + 1], axis=1)
     return B
+
 
 def sort_values_and_weights(weights, values, Y, band_type):
     """
@@ -263,15 +275,16 @@ def sort_values_and_weights(weights, values, Y, band_type):
     Y_sorted : ndarray
         Forecast ensemble sorted by values.
     """
-    if band_type == 'upper':
+    if band_type == "upper":
         i = np.argsort(values)
-    elif band_type == 'lower':
+    elif band_type == "lower":
         i = np.argsort(values)[::-1]
     values_sorted = values[i]
     w_sorted = weights[i]
     Y_sorted = Y[:, i]
     levels = np.cumsum(w_sorted)
     return levels, values_sorted, Y_sorted
+
 
 def weighted_band(Y, weights, scp, band_type):
     """
@@ -292,11 +305,13 @@ def weighted_band(Y, weights, scp, band_type):
     ndarray
         Weighted prediction band.
     """
-    if band_type == 'upper':
+    if band_type == "upper":
         M = np.max(Y, axis=0)
-    elif band_type == 'lower':
+    elif band_type == "lower":
         M = np.min(Y, axis=0)
-    levels, M_sorted, Y_sorted = sort_values_and_weights(weights, M, Y, band_type=band_type)
+    levels, M_sorted, Y_sorted = sort_values_and_weights(
+        weights, M, Y, band_type=band_type
+    )
 
     idx = min([np.searchsorted(levels, scp), len(levels) - 1])
 
@@ -308,17 +323,19 @@ def weighted_band(Y, weights, scp, band_type):
 
         l1, l2 = levels[idx - 1], levels[idx]
         denominator = l2 - l1
-        nominator_1 = B1*(l2 - scp)
-        nominator_2 = B2*(scp - l1)
-        if denominator == 0: # edge case that should not happen
+        nominator_1 = B1 * (l2 - scp)
+        nominator_2 = B2 * (scp - l1)
+        if denominator == 0:  # edge case that should not happen
             raise ValueError("Denominator for weighted path is 0")
         B = (nominator_1 + nominator_2) / denominator
 
     return B
 
+
 ###################################################################################################################
 # WEIGHTS UTILS
 ###################################################################################################################
+
 
 def weighted_median(values, weights):
     """
@@ -348,12 +365,15 @@ def weighted_median(values, weights):
         c1, c2 = c[idx - 1], c[idx]
         v1, v2 = v[idx - 1], v[idx]
         denominator = c2 - c1
-        nominator_1 = v1*(c2 - p)
-        nominator_2 = v2*(p - c1)
+        nominator_1 = v1 * (c2 - p)
+        nominator_2 = v2 * (p - c1)
         interpolated_value = (nominator_1 + nominator_2) / denominator
         return interpolated_value
 
-def compute_weights(forecast_so_far, observed_so_far, kernel_width, p, lambda_, weights_method='kernel'):
+
+def compute_weights(
+    forecast_so_far, observed_so_far, kernel_width, p, lambda_, weights_method="kernel"
+):
     """
     Compute normalized path weights given forecasts and observations.
 
@@ -385,44 +405,51 @@ def compute_weights(forecast_so_far, observed_so_far, kernel_width, p, lambda_, 
     w_time = np.exp(-lambda_ * age)
     w_time /= np.sum(w_time)
 
-    if weights_method == 'kernel':
-        # we are calculating the kernel on TIME DIMENSION vectors: so each observation from trajectory is a vector element, we apply decay weight and sum over it 
+    if weights_method == "kernel":
+        # we are calculating the kernel on TIME DIMENSION vectors: so each observation from trajectory is a vector element, we apply decay weight and sum over it
         err = np.sum(w_time[:, None] * (np.abs(diffs)) ** 2, axis=0)
-        raw = np.exp(-kernel_width * (err ** (p/2))) # for p = 2 it is gaussian kernel
+        raw = np.exp(
+            -kernel_width * (err ** (p / 2))
+        )  # for p = 2 it is gaussian kernel
 
         # scale the weights so that they sum to 1
         s = np.sum(raw)
-        if s == 0 or not np.isfinite(s): # it can happen that the error is large and we are not able to scale efficiently with any of our paths
+        if (
+            s == 0 or not np.isfinite(s)
+        ):  # it can happen that the error is large and we are not able to scale efficiently with any of our paths
             N = raw.size
             return np.ones(N) / N
 
         weights = raw / s
     elif weights_method == "mae":
-        diffs = np.where(diffs == 0, 1e-6, diffs) # handle the rare cases (~30) where naive sampling gave us exact price (can happen sometimes especially in night hours)
+        diffs = np.where(
+            diffs == 0, 1e-6, diffs
+        )  # handle the rare cases (~30) where naive sampling gave us exact price (can happen sometimes especially in night hours)
         all_paths_mae = np.mean(np.abs(diffs), axis=0)
-        inverse_mae = 1/all_paths_mae
-        weights = inverse_mae/np.sum(inverse_mae)
+        inverse_mae = 1 / all_paths_mae
+        weights = inverse_mae / np.sum(inverse_mae)
 
     return weights
+
 
 ###################################################################################################################
 # DEVEL TRAJECTORIES PLOTS UTILS
 ###################################################################################################################
 
+
 def add_curve(fig, x, y, name, color):
     """
     Add a curve trace to a Plotly figure.
     """
-    fig.add_trace(go.Scatter(
-                    x=x, y=y,
-                    mode="lines+markers",
-                    name=name,
-                    line=dict(color=color)
-                ))
+    fig.add_trace(
+        go.Scatter(x=x, y=y, mode="lines+markers", name=name, line=dict(color=color))
+    )
+
 
 ###################################################################################################################
 # NOVEL PROBABILISTIC FORECAST MEASURES UTILS
 ###################################################################################################################
+
 
 def weighted_classification_accuracy(y_actual, y_forecast, naive):
     """
@@ -446,17 +473,21 @@ def weighted_classification_accuracy(y_actual, y_forecast, naive):
     """
 
     y_forecast_median = np.median(y_forecast, axis=1)
-    indic_fore = np.where(y_forecast_median  > naive, 1, np.where(y_forecast_median < naive, -1, 0))
-    indic_actual = np.where(y_actual  > naive, 1, np.where(y_actual < naive, -1, 0))
-    
+    indic_fore = np.where(
+        y_forecast_median > naive, 1, np.where(y_forecast_median < naive, -1, 0)
+    )
+    indic_actual = np.where(y_actual > naive, 1, np.where(y_actual < naive, -1, 0))
+
     # Compute weights: Higher MAE means higher penalty
     mae = np.abs(y_actual - y_forecast_median)
-    weights = 1 + ((mae - np.min(mae)) / (np.max(mae) - np.min(mae)))  # Normalize by mean MAE
-    
+    weights = 1 + (
+        (mae - np.min(mae)) / (np.max(mae) - np.min(mae))
+    )  # Normalize by mean MAE
+
     # Compute weighted misclassification
     misclassified = (indic_actual != indic_fore).astype(int)
     weighted_misclassification = np.sum(weights * misclassified)
-    
+
     # Compute WCA
     wca = 1 - (weighted_misclassification / np.sum(weights))
 
@@ -464,6 +495,7 @@ def weighted_classification_accuracy(y_actual, y_forecast, naive):
     vanilla_ca = 1 - np.sum(misclassified) / len(misclassified)
 
     return wca, vanilla_ca
+
 
 def probabilistic_weighted_classification_accuracy(y_actual, y_forecast, naive):
     """
@@ -488,21 +520,24 @@ def probabilistic_weighted_classification_accuracy(y_actual, y_forecast, naive):
     """
 
     y_forecast_median = np.median(y_forecast, axis=1)
-    indic_fore = np.where(y_forecast_median  > naive, 1, np.where(y_forecast_median < naive, -1, 0))
-    indic_actual = np.where(y_actual  > naive, 1, np.where(y_actual < naive, -1, 0))
+    indic_fore = np.where(
+        y_forecast_median > naive, 1, np.where(y_forecast_median < naive, -1, 0)
+    )
+    indic_actual = np.where(y_actual > naive, 1, np.where(y_actual < naive, -1, 0))
 
     # Compute weights: Higher MAE means higher penalty
     mae = np.abs(y_actual - y_forecast_median)
-    weights = 1 + ((mae - np.min(mae)) / (np.max(mae) - np.min(mae)))  # Normalize by mean MAE
+    weights = 1 + (
+        (mae - np.min(mae)) / (np.max(mae) - np.min(mae))
+    )  # Normalize by mean MAE
 
     # Correct weights by the probability
     y_na = naive.reshape(-1, 1)
-    y_fc  = y_forecast
+    y_fc = y_forecast
     below = (y_fc < y_na).mean(axis=1)
     equal = (y_fc == y_na).mean(axis=1)
     above = (y_fc > y_na).mean(axis=1)
-    probab = np.where(indic_fore == -1, below,
-         np.where(indic_fore == 0, equal, above))
+    probab = np.where(indic_fore == -1, below, np.where(indic_fore == 0, equal, above))
 
     # Compute weighted misclassification
     misclassified = (indic_actual != indic_fore).astype(int)
@@ -516,9 +551,11 @@ def probabilistic_weighted_classification_accuracy(y_actual, y_forecast, naive):
 
     return wca, vanilla_ca
 
+
 ###################################################################################################################
 # STRATEGY UTILS
 ###################################################################################################################
+
 
 def get_trust_threshold(residuals, trust_threshold_method):
     """Comppute the trust threshold for trading decision change in dynamic strategies."""

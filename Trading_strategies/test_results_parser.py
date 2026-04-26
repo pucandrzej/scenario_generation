@@ -17,8 +17,8 @@ OUTPUT_FILE = "final_summary_table.csv"
 # HELPERS
 # ============================================================
 
-def parse_filename(fname):
 
+def parse_filename(fname):
     name = os.path.basename(fname).replace(".csv", "")
     base = name.replace("test_trading_strategy_measures_", "")
 
@@ -55,7 +55,7 @@ def classify_strategy(meta):
     out = {}
 
     # Seller / Prop
-    if meta["direction"] == '-1':
+    if meta["direction"] == "-1":
         out["agent_type"] = "SELLER"
     else:
         out["agent_type"] = "PROP"
@@ -106,7 +106,6 @@ rows = []
 
 
 for file in all_files:
-
     meta = parse_filename(file)
     cls = classify_strategy(meta)
 
@@ -119,17 +118,14 @@ for file in all_files:
     baseline = baseline_df.loc[baseline_df["Sortino_ratio"].idxmax()]
 
     row = {
-
         # Grouping
         "agent_type": cls["agent_type"],
         "model_class": cls["model_class"],
         "risk_type": cls["risk_type"],
         "scenario_type": cls["scenario_type"],
         "data_type": cls["data_type"],
-
         # Source
         "file": file,
-
         # -----------------------------
         # Dynamic
         # -----------------------------
@@ -143,7 +139,6 @@ for file in all_files:
         "rtp": dynamic["rtp"],
         "topk": dynamic["topk"],
         "sortino": dynamic["Sortino_ratio"],
-
         # -----------------------------
         # Baseline (non-dynamic)
         # -----------------------------
@@ -177,27 +172,27 @@ summary = summary.sort_values(
 
 
 # Rename for presentation
-summary = summary.rename(columns={
-    "agent_type": "AGENT",
-    "model_class": "MODEL",
-    "risk_type": "RISK",
-    "scenario_type": "SCENARIO",
-    "data_type": "DATA",
-
-    # Dynamic
-    "sortino": "SORTINO",
-    "profit": "PROFIT",
-    "std_minus": "STD-",
-    "rtp": "RTP",
-    "topk": "TOPK",
-
-    # Baseline
-    "_sortino": "_SORTINO",
-    "_profit": "_PROFIT",
-    "_std_minus": "_STD-",
-    "_rtp": "_RTP",
-    "_topk": "_TOPK",
-})
+summary = summary.rename(
+    columns={
+        "agent_type": "AGENT",
+        "model_class": "MODEL",
+        "risk_type": "RISK",
+        "scenario_type": "SCENARIO",
+        "data_type": "DATA",
+        # Dynamic
+        "sortino": "SORTINO",
+        "profit": "PROFIT",
+        "std_minus": "STD-",
+        "rtp": "RTP",
+        "topk": "TOPK",
+        # Baseline
+        "_sortino": "_SORTINO",
+        "_profit": "_PROFIT",
+        "_std_minus": "_STD-",
+        "_rtp": "_RTP",
+        "_topk": "_TOPK",
+    }
+)
 
 
 # Save flat CSV

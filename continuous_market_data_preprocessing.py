@@ -1,7 +1,6 @@
-'''
+"""
 Script that preprocesses the continuous market prices and volumes and adds the calendar day-of-week indicators.
-Note that we assume the hourly deliveries info will also start also at 16:00 to keep the shape consistent.
-'''
+"""
 
 import glob
 import os
@@ -14,17 +13,30 @@ from tqdm import tqdm
 
 import sqlite3
 import warnings
-from datetime import datetime, timedelta
-from config.paths import DATA_DIR
+from config.paths import DATA_DIR, MARKET_DATA_DIR
+from config.test_calibration_validation import (
+    required_start,
+    required_end,
+    summer_time_2020_dst,
+    winter_time_2020_dst,
+    data_reporting_standardization_start,
+    data_reporting_standardization_end,
+)
 
 warnings.filterwarnings("ignore")
 
+
 # later use it as exog variable in the trajectory forecast for choosen deliveries and compare
 def initial_preprocessing():
-
-    if not os.path.exists(os.path.join(DATA_DIR, "Transactions", "quarterhourly_price_analysis_table_5min.csv")):
+    if not os.path.exists(
+        os.path.join(
+            DATA_DIR, "Transactions", "quarterhourly_price_analysis_table_5min.csv"
+        )
+    ):
         # load the complete dataset
-        if not os.path.exists(os.path.join(DATA_DIR, "Transactions", "concatenated_table.csv")):
+        if not os.path.exists(
+            os.path.join(DATA_DIR, "Transactions", "concatenated_table.csv")
+        ):
             df = pd.concat(
                 [
                     pd.read_csv(
@@ -42,7 +54,9 @@ def initial_preprocessing():
                             "Trade ID",
                         ],
                     )
-                    for f in glob.glob(os.path.join(DATA_DIR, "Transactions", "*", "*.csv"))
+                    for f in glob.glob(
+                        os.path.join(DATA_DIR, "Transactions", "*", "*.csv")
+                    )
                 ]
             )
             df[
@@ -54,9 +68,7 @@ def initial_preprocessing():
                     "Volume (MW)",
                     "Date",
                 ]
-            ].to_csv(
-                os.path.join(DATA_DIR, "Transactions", "concatenated_table.csv")
-            )
+            ].to_csv(os.path.join(DATA_DIR, "Transactions", "concatenated_table.csv"))
         else:
             df = pd.read_csv(
                 os.path.join(DATA_DIR, "Transactions", "concatenated_table.csv"),
@@ -73,7 +85,9 @@ def initial_preprocessing():
         # cut only the quarter-hourly deliveries from the dataset & the columns that we need
         df_copy = df[
             (df["Hour from"].str.contains("qh"))
-            & (~df["Hour from"].str.contains("B")) # we do not consider the B hour in our analysis as averaging would include abnormally more price info into the trajectory
+            & (
+                ~df["Hour from"].str.contains("B")
+            )  # we do not consider the B hour in our analysis as averaging would include abnormally more price info into the trajectory
             & (
                 df["Hour from"] == df["Hour to"]
             )  # there is no such case where hour from is different than hour to in our dataset, but otherwise this would be sensible condition
@@ -83,8 +97,7 @@ def initial_preprocessing():
         mod_trans_from = []
         offer_time = []
         for i, val in tqdm(enumerate(df_copy["Hour from"])):
-            if "A" not in val: 
-
+            if "A" not in val:
                 minutes = str((int(val.split("qh")[1]) - 1) * 15)
                 hours = val.split("qh")[0]
 
@@ -97,18 +110,16 @@ def initial_preprocessing():
                         + ":"
                         + minutes
                         + ":00",
-                        "%d/%m/%Y %H:%M:%S"
+                        "%d/%m/%Y %H:%M:%S",
                     )
                 )
-            elif (
-                "A" in val
-            ): 
+            elif "A" in val:
                 minutes = str((int(val.split("Aqh")[1]) - 1) * 15)
                 hours = str(int(val.split("Aqh")[0]) - 1)
 
                 if datetime.strptime(
                     df_copy["Date"][i] + " " + hours.zfill(2) + ":" + minutes + ":00",
-                    "%d/%m/%Y %H:%M:%S"
+                    "%d/%m/%Y %H:%M:%S",
                 ) < pd.to_datetime(df_copy.loc[i, "Time Stamp"]):
                     raise
                 mod_trans_from.append(
@@ -119,23 +130,33 @@ def initial_preprocessing():
                         + ":"
                         + minutes
                         + ":00",
-                        "%d/%m/%Y %H:%M:%S"
+                        "%d/%m/%Y %H:%M:%S",
                     )
                 )
 
             offer_time.append(
-                pd.Timestamp(datetime.strptime(
-                    df_copy["Time Stamp"][i][:-2] + "00", "%d/%m/%Y %H:%M:%S"
-                )).floor('5min')
+                pd.Timestamp(
+                    datetime.strptime(
+                        df_copy["Time Stamp"][i][:-2] + "00", "%d/%m/%Y %H:%M:%S"
+                    )
+                ).floor("5min")
             )
         df_copy["Datetime from"] = mod_trans_from
         df_copy["Datetime offer time"] = offer_time
-        df_copy.to_csv(os.path.join(DATA_DIR, "Transactions", "quarterhourly_price_analysis_table_5min.csv"))
+        df_copy.to_csv(
+            os.path.join(
+                DATA_DIR, "Transactions", "quarterhourly_price_analysis_table_5min.csv"
+            )
+        )
     print(
         "Preliminary preprocessed already performed. Performing additional preprocessing..."
     )
     # read the preprocessed dataset
-    df_copy = pd.read_csv(os.path.join(DATA_DIR, "Transactions", "quarterhourly_price_analysis_table_5min.csv"))
+    df_copy = pd.read_csv(
+        os.path.join(
+            DATA_DIR, "Transactions", "quarterhourly_price_analysis_table_5min.csv"
+        )
+    )
 
     # transform columns to datetime from string
     df_copy["Datetime offer time"] = pd.to_datetime(df_copy["Datetime offer time"])
@@ -143,74 +164,50 @@ def initial_preprocessing():
 
     # shift trades from 14:00 to 15:00 on 24.10.2020 by 1h - reporting error
     df_copy.loc[
-        (
-            df_copy["Datetime offer time"]
-            >= datetime(day=24, month=10, year=2020, hour=14)
-        )
-        & (
-            df_copy["Datetime offer time"]
-            < datetime(day=24, month=10, year=2020, hour=15)
-        )
+        (df_copy["Datetime offer time"] >= data_reporting_standardization_start)
+        & (df_copy["Datetime offer time"] < data_reporting_standardization_end)
         & (df_copy["Datetime offer time"].dt.date != df_copy["Datetime from"].dt.date),
         "Datetime offer time",
     ] = df_copy.loc[
-        (
-            df_copy["Datetime offer time"]
-            >= datetime(day=24, month=10, year=2020, hour=14)
-        )
-        & (
-            df_copy["Datetime offer time"]
-            < datetime(day=24, month=10, year=2020, hour=15)
-        )
+        (df_copy["Datetime offer time"] >= data_reporting_standardization_start)
+        & (df_copy["Datetime offer time"] < data_reporting_standardization_end)
         & (df_copy["Datetime offer time"].dt.date != df_copy["Datetime from"].dt.date),
         "Datetime offer time",
-    ] + timedelta(
-        hours=1
-    )
+    ] + timedelta(hours=1)
 
     # shift winter in 2020 by 1h
     df_copy.loc[
         (df_copy["Datetime from"].dt.year == 2020)
         & (
-            (df_copy["Datetime from"] < datetime(day=29, month=3, year=2020, hour=3))
-            | (
-                df_copy["Datetime from"]
-                >= datetime(day=25, month=10, year=2020, hour=3)
-            )
+            (df_copy["Datetime from"] < summer_time_2020_dst)
+            | (df_copy["Datetime from"] >= winter_time_2020_dst)
         ),
         "Datetime offer time",
     ] = df_copy.loc[
         (df_copy["Datetime from"].dt.year == 2020)
         & (
-            (df_copy["Datetime from"] < datetime(day=29, month=3, year=2020, hour=3))
-            | (
-                df_copy["Datetime from"]
-                >= datetime(day=25, month=10, year=2020, hour=3)
-            )
+            (df_copy["Datetime from"] < summer_time_2020_dst)
+            | (df_copy["Datetime from"] >= winter_time_2020_dst)
         ),
         "Datetime offer time",
-    ] + timedelta(
-        hours=1
-    )
+    ] + timedelta(hours=1)
 
     # shift summer in 2020 by 2h
     df_copy.loc[
-        (df_copy["Datetime from"] >= datetime(day=29, month=3, year=2020, hour=3))
-        & (df_copy["Datetime from"] < datetime(day=25, month=10, year=2020, hour=3)),
+        (df_copy["Datetime from"] >= summer_time_2020_dst)
+        & (df_copy["Datetime from"] < winter_time_2020_dst),
         "Datetime offer time",
     ] = df_copy.loc[
-        (df_copy["Datetime from"] >= datetime(day=29, month=3, year=2020, hour=3))
-        | (df_copy["Datetime from"] < datetime(day=25, month=10, year=2020, hour=3)),
+        (df_copy["Datetime from"] >= summer_time_2020_dst)
+        | (df_copy["Datetime from"] < winter_time_2020_dst),
         "Datetime offer time",
-    ] + timedelta(
-        hours=2
-    )
+    ] + timedelta(hours=2)
 
     # define TTD column as a difference between delivery and offer times
     df_copy["Time to delivery"] = (
         pd.to_datetime(df_copy["Datetime from"])
         - pd.to_datetime(df_copy["Datetime offer time"])
-    ).dt.total_seconds() / 300 # 5 min aggregation
+    ).dt.total_seconds() / 300  # 5 min aggregation
 
     # drop the columns unnecessary to analysis
     df_copy = df_copy.drop("Date", axis=1)
@@ -221,19 +218,28 @@ def initial_preprocessing():
     df_copy = df_copy.drop("Hour to", axis=1)
 
     # save the resulting table of unevenly spaced trades with volume, prices and day of the week
-    df_copy.to_csv(os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv"), date_format="%s")
+    df_copy.to_csv(
+        os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv"),
+        date_format="%s",
+    )
 
 
 def preprocess_data(start, end, ID_qtrly, add_dummies):
     demanded_len = 32 * 12  # daily data len (all 5 min intervals)
     print("Cached data unavailable, preparing & saving the data.")
-    if os.path.exists(os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv")):
-        df = pd.read_csv(os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv"))
+    if os.path.exists(
+        os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv")
+    ):
+        df = pd.read_csv(
+            os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv")
+        )
     else:
         print("Preparing the initially preprocessed dataset...")
         initial_preprocessing()
         print("Done.")
-        df = pd.read_csv(os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv"))
+        df = pd.read_csv(
+            os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv")
+        )
     df["Datetime from"] = pd.to_datetime(df["Datetime from"])
     df["Datetime offer time"] = pd.to_datetime(df["Datetime offer time"])
     df = df[(df["Datetime from"] >= start) & ((df["Datetime from"]) < end)]
@@ -262,7 +268,9 @@ def preprocess_data(start, end, ID_qtrly, add_dummies):
         stable_shift = 0
         first_deliveries_unavail = False
         missing_windows = {}
-        last_delivery = pd.to_datetime(np.sort(unique_datetime_from)[0]).replace( # initialize the delivery time
+        last_delivery = pd.to_datetime(
+            np.sort(unique_datetime_from)[0]
+        ).replace(  # initialize the delivery time
             minute=0
         )
 
@@ -275,7 +283,7 @@ def preprocess_data(start, end, ID_qtrly, add_dummies):
                 ).total_seconds()
                 / 60
                 != demanded_delta
-            ):  # check whether we are not missing any deliveries in between - and if we are - 
+            ):  # check whether we are not missing any deliveries in between - and if we are -
                 shift = (
                     int(
                         (
@@ -286,7 +294,7 @@ def preprocess_data(start, end, ID_qtrly, add_dummies):
                         )
                         // demanded_delta
                     )
-                    - 1 # - 1 because we calculate from the end of the last available period but last_delivery is its start
+                    - 1  # - 1 because we calculate from the end of the last available period but last_delivery is its start
                 )
                 missing_windows[delivery_idx] = (
                     shift  # save the no. of missing deliveries
@@ -358,19 +366,20 @@ def preprocess_data(start, end, ID_qtrly, add_dummies):
                 time_to_delivery.append(group[1]["Time to delivery"].to_numpy()[0])
             time_to_delivery = time_to_delivery[::-1]
             price = price[::-1]
-            trading_start = ( # anticipated start of trading at 16:00
-                pd.to_datetime(delivery)
-                - (pd.to_datetime(delivery) - timedelta(days=1))
-                .replace(hour=16)
-                .replace(minute=0)
-            ).total_seconds() / 300  # trading starts at 16:00 each day - we compute this date and time as minutes to delivery
-            if trading_start > np.max(time_to_delivery): # if trading did not start at 16;00 we add the price from ID auction from the left
+            trading_start = (
+                (  # anticipated start of trading at 16:00
+                    pd.to_datetime(delivery)
+                    - (pd.to_datetime(delivery) - timedelta(days=1))
+                    .replace(hour=16)
+                    .replace(minute=0)
+                ).total_seconds()
+                / 300
+            )  # trading starts at 16:00 each day - we compute this date and time as minutes to delivery
+            if (
+                trading_start > np.max(time_to_delivery)
+            ):  # if trading did not start at 16;00 we add the price from ID auction from the left
                 price = [
-                    float(
-                        ID_qtrly[ID_qtrly.index == delivery][
-                            "price"
-                        ].to_numpy()[0]
-                    )
+                    float(ID_qtrly[ID_qtrly.index == delivery]["price"].to_numpy()[0])
                 ] + price
                 time_to_delivery = [trading_start] + time_to_delivery
             end = 0
@@ -444,7 +453,9 @@ def preprocess_data(start, end, ID_qtrly, add_dummies):
                 ax.legend()
                 plt.savefig(f"sample_preprocessing_{delivery_idx}_{d}.pdf")
                 plt.close(fig)
-            preprocessed_data[delivery_idx + demanded_deliveries_no] = volumes[:demanded_len]
+            preprocessed_data[delivery_idx + demanded_deliveries_no] = volumes[
+                :demanded_len
+            ]
 
             # INDICATORS OF TRADE EXISTENCE IN PERIOD
             trade_indicator = []
@@ -478,7 +489,9 @@ def preprocess_data(start, end, ID_qtrly, add_dummies):
             elif len(trade_indicators) > demanded_len:
                 trade_indicators = trade_indicators[:demanded_len]
 
-            preprocessed_data[delivery_idx + 2*demanded_deliveries_no] = trade_indicators[:demanded_len]
+            preprocessed_data[delivery_idx + 2 * demanded_deliveries_no] = (
+                trade_indicators[:demanded_len]
+            )
 
         preprocessed_data = preprocessed_data.reindex(
             sorted(preprocessed_data.columns), axis=1
@@ -489,12 +502,18 @@ def preprocess_data(start, end, ID_qtrly, add_dummies):
                     preprocessed_data[col_n] = preprocessed_data[
                         col_n + missing_windows[corr_idx]
                     ]
-                    preprocessed_data[col_n + demanded_deliveries_no] = preprocessed_data[
-                        col_n + missing_windows[corr_idx] + demanded_deliveries_no
-                    ]
-                    preprocessed_data[col_n + 2*demanded_deliveries_no] = preprocessed_data[
-                        col_n + missing_windows[corr_idx] + 2*demanded_deliveries_no
-                    ]
+                    preprocessed_data[col_n + demanded_deliveries_no] = (
+                        preprocessed_data[
+                            col_n + missing_windows[corr_idx] + demanded_deliveries_no
+                        ]
+                    )
+                    preprocessed_data[col_n + 2 * demanded_deliveries_no] = (
+                        preprocessed_data[
+                            col_n
+                            + missing_windows[corr_idx]
+                            + 2 * demanded_deliveries_no
+                        ]
+                    )
             else:
                 for col_n in range(corr_idx, corr_idx + missing_windows[corr_idx]):
                     preprocessed_data[col_n] = (
@@ -502,16 +521,30 @@ def preprocess_data(start, end, ID_qtrly, add_dummies):
                         + preprocessed_data[col_n + missing_windows[corr_idx]]
                     ) / 2
                     preprocessed_data[col_n + demanded_deliveries_no] = (
-                        preprocessed_data[col_n - missing_windows[corr_idx] + demanded_deliveries_no]
-                        + preprocessed_data[col_n + missing_windows[corr_idx] + demanded_deliveries_no]
+                        preprocessed_data[
+                            col_n - missing_windows[corr_idx] + demanded_deliveries_no
+                        ]
+                        + preprocessed_data[
+                            col_n + missing_windows[corr_idx] + demanded_deliveries_no
+                        ]
                     ) / 2
-                    preprocessed_data[col_n + 2*demanded_deliveries_no] = (
-                        preprocessed_data[col_n - missing_windows[corr_idx] + 2*demanded_deliveries_no]
-                        + preprocessed_data[col_n + missing_windows[corr_idx] + 2*demanded_deliveries_no]
+                    preprocessed_data[col_n + 2 * demanded_deliveries_no] = (
+                        preprocessed_data[
+                            col_n
+                            - missing_windows[corr_idx]
+                            + 2 * demanded_deliveries_no
+                        ]
+                        + preprocessed_data[
+                            col_n
+                            + missing_windows[corr_idx]
+                            + 2 * demanded_deliveries_no
+                        ]
                     ) / 2
 
         # ADD DUMMIES
-        preprocessed_data[3*demanded_deliveries_no] = np.ones(demanded_len) * date.weekday()
+        preprocessed_data[3 * demanded_deliveries_no] = (
+            np.ones(demanded_len) * date.weekday()
+        )
 
         preprocessed_data["Time"] = pd.date_range(
             (pd.to_datetime(date) - timedelta(days=1))
@@ -527,18 +560,27 @@ def preprocess_data(start, end, ID_qtrly, add_dummies):
 
         print(f"Done {d} of {len(np.unique(df['Datetime from'].dt.date))}")
 
-if __name__ == "__main__":
-    if not os.path.exists(os.path.join(DATA_DIR, f"preprocessed_continuous_intraday_prices_and_volume.db")):
-        con = sqlite3.connect(os.path.join(DATA_DIR, f"preprocessed_continuous_intraday_prices_and_volume.db"))
-    else:
-        os.remove(os.path.join(DATA_DIR, f"preprocessed_continuous_intraday_prices_and_volume.db"))
-        con = sqlite3.connect(os.path.join(DATA_DIR, f"preprocessed_continuous_intraday_prices_and_volume.db"))
 
-    ID_qtrly = pd.read_csv(os.path.join(DATA_DIR, "ID_auction_preprocessed", "ID_auction_price_2018-2020_preproc.csv"), index_col=0, parse_dates=True)
+if __name__ == "__main__":
+    if not os.path.exists(MARKET_DATA_DIR):
+        con = sqlite3.connect(MARKET_DATA_DIR)
+    else:
+        os.remove(MARKET_DATA_DIR)
+        con = sqlite3.connect(MARKET_DATA_DIR)
+
+    ID_qtrly = pd.read_csv(
+        os.path.join(
+            DATA_DIR,
+            "ID_auction_preprocessed",
+            "ID_auction_price_2018-2020_preproc.csv",
+        ),
+        index_col=0,
+        parse_dates=True,
+    )
 
     preprocess_data(
-        datetime(2018, 11, 1, 0, 0, 0),
-        datetime(2021, 1, 2, 0, 0, 0),
+        required_start,
+        required_end,
         ID_qtrly,
         True,
     )

@@ -57,7 +57,9 @@ parser.add_argument(
     help="Select the MULTI_prediction or benchmark_prediction.",
 )
 parser.add_argument(
-    "--run_type", default="calibration", help="Select the run type: calibration or test."
+    "--run_type",
+    default="calibration",
+    help="Select the run type: calibration or test.",
 )
 parser.add_argument(
     "--scp",
@@ -127,16 +129,14 @@ if args.underlying_model_column is None:
     columns_names = [
         "MULTI_prediction",
         "MULTI_prediction",
-        "benchmark_prediction"
-        "MULTI_prediction",
+        "benchmark_predictionMULTI_prediction",
         "MULTI_prediction",
     ]
 else:
     columns_names = [args.underlying_model_column]
 
-def naive_1(
-    y_actual
-):
+
+def naive_1(y_actual):
     """
     Naive that always sells in 1st step for seller and sells in 1st step and buys at last step for speculator
     """
@@ -155,9 +155,8 @@ def naive_1(
     # no trade executed
     return profit, 0, 1, best_profit, worst_profit
 
-def naive_30(
-    y_actual
-):
+
+def naive_30(y_actual):
     """
     Naive that always sells in last step for seller and sells in last step and buys at first step for speculator
     """
@@ -175,6 +174,7 @@ def naive_30(
 
     # no trade executed
     return profit, 0, 1, best_profit, worst_profit
+
 
 def one_sided_bands_strategy(
     y_actual,
@@ -232,7 +232,7 @@ def one_sided_bands_strategy(
 
     played = False
 
-    profit = 0 # profit declaration
+    profit = 0  # profit declaration
 
     # iterate over t=0..T-1 and adapt plan if a more profitable buy/sell points are detected
     for t in range(T):
@@ -240,8 +240,12 @@ def one_sided_bands_strategy(
         price_so_far = y_actual[: t + 1]
         forecast_so_far = y_forecast[: t + 1, :]
 
-        residuals = np.median(forecast_so_far, axis=1) - price_so_far # calc errors between median of trajectories and price observed so far
-        trust_threshold, nonzero_mae = get_trust_threshold(residuals, trust_threshold_method)
+        residuals = (
+            np.median(forecast_so_far, axis=1) - price_so_far
+        )  # calc errors between median of trajectories and price observed so far
+        trust_threshold, nonzero_mae = get_trust_threshold(
+            residuals, trust_threshold_method
+        )
 
         w = compute_weights(
             forecast_so_far,
@@ -271,7 +275,13 @@ def one_sided_bands_strategy(
         if DEV_PLOTS:
             if t == 0:
                 for fore_idx in range(np.shape(y_forecast)[1]):
-                    add_curve(fig, x, y_forecast[:, fore_idx], f"{fore_idx} forecast path", "grey")
+                    add_curve(
+                        fig,
+                        x,
+                        y_forecast[:, fore_idx],
+                        f"{fore_idx} forecast path",
+                        "grey",
+                    )
                 add_curve(fig, x, band, "Band", "blue")
                 add_curve(fig, x, y_actual, "Actual", "green")
             add_curve(fig, x[T - len(cond_band) :], cond_band, f"Band {t}", "red")
@@ -298,9 +308,7 @@ def one_sided_bands_strategy(
             desired_entry_profit = y_actual[desired_entry]
 
         # we shift the entering of position if we see more profit from changing it
-        if (
-            desired_entry_profit - trust_threshold > planned_entry_profit
-        ):
+        if desired_entry_profit - trust_threshold > planned_entry_profit:
             planned_entry = desired_entry
 
         # entry logic: if not in position and planned entry is now -> enter
@@ -324,7 +332,7 @@ def two_sided_bands_strategy(
     p,
     lambda_=0.25,
     trust_threshold_method="3sigma",
-    weights_method="kernel"
+    weights_method="kernel",
 ):
     if DEV_PLOTS:
         fig = go.Figure()
@@ -379,7 +387,9 @@ def two_sided_bands_strategy(
         forecast_so_far = y_forecast[: t + 1, :]
 
         residuals = np.median(forecast_so_far, axis=1) - price_so_far
-        trust_threshold, nonzero_mae = get_trust_threshold(residuals, trust_threshold_method)
+        trust_threshold, nonzero_mae = get_trust_threshold(
+            residuals, trust_threshold_method
+        )
         w = compute_weights(
             forecast_so_far,
             price_so_far,
@@ -435,22 +445,26 @@ def two_sided_bands_strategy(
             desired_exit = new_argmax
 
         if planned_entry > t:
-            if planned_direction == -1: # if we short we go from entry on max band to exit on min band
+            if (
+                planned_direction == -1
+            ):  # if we short we go from entry on max band to exit on min band
                 planned_entry_profit = (
                     cond_min_band[planned_exit - t - 1]
                     - cond_max_band[planned_entry - t - 1]
                 )
-            else: # if we long we go from entry on min band to exit on max band
+            else:  # if we long we go from entry on min band to exit on max band
                 planned_entry_profit = (
                     cond_max_band[planned_exit - t - 1]
                     - cond_min_band[planned_entry - t - 1]
                 )
         elif planned_entry == t:
-            if planned_direction == -1: # if we short we go from entry on max band to exit on min band
+            if (
+                planned_direction == -1
+            ):  # if we short we go from entry on max band to exit on min band
                 planned_entry_profit = (
                     cond_min_band[planned_exit - t - 1] - y_actual[planned_entry]
                 )
-            else: # if we long we go from entry on min band to exit on max band
+            else:  # if we long we go from entry on min band to exit on max band
                 planned_entry_profit = (
                     cond_max_band[planned_exit - t - 1] - y_actual[planned_entry]
                 )
@@ -480,7 +494,8 @@ def two_sided_bands_strategy(
         if (
             desired_exit != desired_entry
             and not in_position
-            and desired_entry_profit * desired_direction - trust_threshold > planned_entry_profit * direction
+            and desired_entry_profit * desired_direction - trust_threshold
+            > planned_entry_profit * direction
         ):
             planned_entry = desired_entry
             planned_exit = desired_exit
@@ -602,7 +617,9 @@ def one_sided_median_trading_strategy(
         forecast_so_far = y_forecast[: t + 1, :]
 
         residuals = np.median(forecast_so_far, axis=1) - price_so_far
-        trust_threshold, nonzero_mae = get_trust_threshold(residuals, trust_threshold_method)
+        trust_threshold, nonzero_mae = get_trust_threshold(
+            residuals, trust_threshold_method
+        )
 
         w = compute_weights(
             forecast_so_far, price_so_far, nonzero_mae, p, lambda_, weights_method
@@ -652,9 +669,7 @@ def one_sided_median_trading_strategy(
             desired_entry_profit = y_actual[desired_entry]
 
         # we shift the entering of position if we see more profit from changing it
-        if (
-            desired_entry_profit - trust_threshold > planned_entry_profit
-        ):
+        if desired_entry_profit - trust_threshold > planned_entry_profit:
             planned_entry = desired_entry
 
         # entry logic: if not in position and planned entry is now -> enter
@@ -744,7 +759,9 @@ def two_sided_median_trading_strategy(
         forecast_so_far = y_forecast[: t + 1, :]
 
         residuals = np.median(forecast_so_far, axis=1) - price_so_far
-        trust_threshold, nonzero_mae = get_trust_threshold(residuals, trust_threshold_method)
+        trust_threshold, nonzero_mae = get_trust_threshold(
+            residuals, trust_threshold_method
+        )
         w = compute_weights(
             forecast_so_far,
             price_so_far,
@@ -797,7 +814,7 @@ def two_sided_median_trading_strategy(
             desired_entry = new_argmin
             desired_exit = new_argmax
 
-        # prepare the planned profit: in case the planned entry is at t we already know the price 
+        # prepare the planned profit: in case the planned entry is at t we already know the price
         if planned_entry > t:
             planned_entry_profit = (
                 cond_medians[planned_exit - t - 1] - cond_medians[planned_entry - t - 1]
@@ -820,7 +837,8 @@ def two_sided_median_trading_strategy(
         if (
             desired_exit != desired_entry
             and not in_position
-            and desired_entry_profit * desired_direction - trust_threshold > planned_entry_profit * direction
+            and desired_entry_profit * desired_direction - trust_threshold
+            > planned_entry_profit * direction
         ):
             planned_entry = desired_entry
             planned_exit = desired_exit
@@ -956,14 +974,22 @@ if __name__ == "__main__":
         trust_threshold_method = grid_config["trust_threshold_method"]
         parameter_method_1 = grid_config["parameter_method_1"]
         parameter_method_2 = grid_config["parameter_method_2"]
-        scp_list = grid_config['scp']
+        scp_list = grid_config["scp"]
         grid = list(
             itertools.product(
-                scp_list, p_list, lambda_list, trust_threshold_method, parameter_method_1
+                scp_list,
+                p_list,
+                lambda_list,
+                trust_threshold_method,
+                parameter_method_1,
             )
         ) + list(
             itertools.product(
-                scp_list, [np.nan], [np.nan], trust_threshold_method, parameter_method_2,
+                scp_list,
+                [np.nan],
+                [np.nan],
+                trust_threshold_method,
+                parameter_method_2,
             )
         )
     elif args.run_type == "test":  # test on test window data
@@ -1139,9 +1165,7 @@ if __name__ == "__main__":
                 1
                 - np.sum(action_per_delivery_and_day) / len(action_per_delivery_and_day)
             )
-            stability_measures[params].append(
-                np.mean(pnl_per_delivery_and_day)
-            )
+            stability_measures[params].append(np.mean(pnl_per_delivery_and_day))
             stability_measures[params].append(profit(best_pnl_per_delivery_and_day))
             stability_measures[params].append(profit(worst_pnl_per_delivery_and_day))
             stability_measures[params].append(
@@ -1158,9 +1182,10 @@ if __name__ == "__main__":
                     go.Scatter(x=x, y=y[:, 0], mode="lines", name=f"strategy {k}")
                 )
 
-            if args.model == 'bands': # for bands we want to save every basic SCP level
+            if args.model == "bands":  # for bands we want to save every basic SCP level
                 ref_params = tuple(
-                    [params[0]] + ["_" for p in range(1, np.shape(grid)[1])]
+                    [params[0]]
+                    + ["_" for p in range(1, np.shape(grid)[1])]
                     + list(params[np.shape(grid)[1] :])
                 )
             else:
@@ -1211,13 +1236,21 @@ if __name__ == "__main__":
                 stability_measures_reference[ref_params].append(
                     np.mean(ref_pnl_per_delivery_and_day)
                 )
-                stability_measures_reference[ref_params].append(profit(best_pnl_per_delivery_and_day))
-                stability_measures_reference[ref_params].append(profit(worst_pnl_per_delivery_and_day))
                 stability_measures_reference[ref_params].append(
-                    downside_std(best_pnl_per_delivery_and_day, one_sided=args.one_sided)
+                    profit(best_pnl_per_delivery_and_day)
                 )
                 stability_measures_reference[ref_params].append(
-                    downside_std(worst_pnl_per_delivery_and_day, one_sided=args.one_sided)
+                    profit(worst_pnl_per_delivery_and_day)
+                )
+                stability_measures_reference[ref_params].append(
+                    downside_std(
+                        best_pnl_per_delivery_and_day, one_sided=args.one_sided
+                    )
+                )
+                stability_measures_reference[ref_params].append(
+                    downside_std(
+                        worst_pnl_per_delivery_and_day, one_sided=args.one_sided
+                    )
                 )
 
                 if args.run_type == "test":
@@ -1278,14 +1311,18 @@ if __name__ == "__main__":
                 "crystal_profit",
                 "noncrystal_profit",
                 "crystal_std_minus",
-                "noncrystal_std_minus"
+                "noncrystal_std_minus",
             ],
         )
 
-        if float(args.direction) == 0 or float(args.direction) == -1: # RATIO if we maximize the profit and minimize risk
+        if (
+            float(args.direction) == 0 or float(args.direction) == -1
+        ):  # RATIO if we maximize the profit and minimize risk
             df["Sortino_ratio"] = df["profit"] / df["std_minus"]
             df = df.sort_values("Sortino_ratio", ascending=False)
-        elif float(args.direction) == 1: # PRODUCT if we minimize the profit and minimize risk
+        elif (
+            float(args.direction) == 1
+        ):  # PRODUCT if we minimize the profit and minimize risk
             df["Sortino_product"] = df["profit"] * df["std_minus"]
             df = df.sort_values("Sortino_product", ascending=True)
 
@@ -1294,5 +1331,7 @@ if __name__ == "__main__":
                 f"FROM_PICKLE_grid_search_trading_strategy_measures_{args.one_sided}_{args.direction}_{args.model}.csv"
             )
         else:
-            df.to_csv(f"test_trading_strategy_measures_{args.underlying_model}_{args.underlying_model_column}_{args.one_sided}_{args.direction}_{args.model}_{args.band_type}.csv")
+            df.to_csv(
+                f"test_trading_strategy_measures_{args.underlying_model}_{args.underlying_model_column}_{args.one_sided}_{args.direction}_{args.model}_{args.band_type}.csv"
+            )
             print(df.to_string())

@@ -88,7 +88,9 @@ def multifore_corrected_laplace_kernel(
     return kernel
 
 
-def corrected_laplace_kernel(X, Y, q_kernel, q_data, q_data_naive, q_kernel_naive, is_train=False):
+def corrected_laplace_kernel(
+    X, Y, q_kernel, q_data, q_data_naive, q_kernel_naive, is_train=False
+):
     """
     RAM efficient way of training and then forecasting using cSVR with one correcting variable and
     one forecasted point at a time.
@@ -110,7 +112,9 @@ def corrected_laplace_kernel(X, Y, q_kernel, q_data, q_data_naive, q_kernel_naiv
         if np.shape(X)[0] == 1:
             intermediate_kernel = np.sqrt(np.sum((Y[:, 1:] - X[:, 1:]) ** 2, axis=1))
         else:
-            intermediate_kernel = calc_interm_kernel(X[:, 1:], Y[:, 1:], are_equal=np.array_equal(X, Y)) # calc_interm_kernel assumes we only enter this part if we forecast in-sample
+            intermediate_kernel = calc_interm_kernel(
+                X[:, 1:], Y[:, 1:], are_equal=np.array_equal(X, Y)
+            )  # calc_interm_kernel assumes we only enter this part if we forecast in-sample
         width = np.log(2 - 2 * q_kernel) / np.quantile(
             intermediate_kernel_train, q_data
         )

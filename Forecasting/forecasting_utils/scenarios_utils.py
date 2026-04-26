@@ -271,7 +271,7 @@ def build_weather_scenarios_and_similarity(
     total_training_days_available,
     weather_scenarios_split_direction,
     X_exog_fundamental_plus_price,
-    only_similarity=False
+    only_similarity=False,
 ):
     """
     Build historical weather scenarios (deltas) and similarity measures
@@ -392,7 +392,7 @@ def build_weather_scenarios_and_similarity(
                 )[-total_training_days_available:]
             )
 
-        if only_similarity: # we do not want to collect the weather scenarios in case of historical simulation
+        if only_similarity:  # we do not want to collect the weather scenarios in case of historical simulation
             continue
 
         # ---- build weather scenarios for future path intervals ----

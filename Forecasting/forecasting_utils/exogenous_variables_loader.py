@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 
+
 def load_csv(data_root, cutoff, *path_parts, **kwargs):
     """
     Load a CSV from a path constructed via os.path.join and
@@ -28,16 +29,16 @@ def load_csv(data_root, cutoff, *path_parts, **kwargs):
     return df[df.index >= cutoff]
 
 
-def load_exogenous_to_cache(
-    cache, first_training_date, delivery_time, data_root=None
-):
+def load_exogenous_to_cache(cache, first_training_date, delivery_time, data_root=None):
     """
     Load all required exogenous datasets into cache using robust os.path.join.
 
     The helper load_csv() is now defined above, NOT inside this function.
     """
 
-    cutoff = first_training_date - pd.Timedelta(days=1) # always loading one day more as we are touching/crossing the midnight with some paths
+    cutoff = (
+        first_training_date - pd.Timedelta(days=1)
+    )  # always loading one day more as we are touching/crossing the midnight with some paths
 
     # ---------- Load datasets ----------
 
@@ -96,7 +97,7 @@ def add_exogenous_from_cache_to_variables(
     date_fore,
     trade_time,
     forecasting_horizon,
-    total_training_days_available
+    total_training_days_available,
 ):
     """
     Populate `variables` list with all exogenous features using values stored in `cache`.
@@ -238,7 +239,7 @@ def add_last_known_exogenous_from_cache(
     date_fore,
     trade_time,
     forecasting_horizon,
-    total_training_days_available
+    total_training_days_available,
 ):
     """
     Add last known load, generation, and physical exchange information (including errors)

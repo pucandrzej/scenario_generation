@@ -274,7 +274,9 @@ def run_one_day(inp):
 
     # load the exogenous variables to cache
     cache = {}
-    cache = load_exogenous_to_cache(cache, first_training_date, delivery_time, data_root=DATA_DIR)
+    cache = load_exogenous_to_cache(
+        cache, first_training_date, delivery_time, data_root=DATA_DIR
+    )
 
     X_exog_fundamental_plus_price = []
 
@@ -291,7 +293,7 @@ def run_one_day(inp):
         date_fore,
         trade_time,
         forecasting_horizon,
-        total_training_days_available
+        total_training_days_available,
     )
 
     X_exog_fundamental_plus_price = add_last_known_exogenous_from_cache(  # add variables that are known only for period before forecasting time
@@ -300,7 +302,7 @@ def run_one_day(inp):
         date_fore,
         trade_time,
         forecasting_horizon,
-        total_training_days_available
+        total_training_days_available,
     )
 
     # add the sum of volume traded for forecasted delivery in the last 60 minutes (12 5min intervals)
@@ -359,7 +361,7 @@ def run_one_day(inp):
             total_training_days_available,
             weather_scenarios_split_direction,
             X_exog_fundamental_plus_price.copy(),
-            only_similarity=True
+            only_similarity=True,
         )
 
     """
@@ -516,9 +518,9 @@ def run_one_day(inp):
 
             # save the base forecast
             results[f"{path_svr_estimator}_prediction_base"] = (
-                    scaler_target.inverse_transform(base_predictions.reshape(1, -1))[0, :]
-                    + last_known_price
-                )
+                scaler_target.inverse_transform(base_predictions.reshape(1, -1))[0, :]
+                + last_known_price
+            )
 
             for scenario_idx, scenario in enumerate(required_scenarios_indices):
                 pred = scenario_forecast[scenario]
@@ -568,7 +570,9 @@ def run_one_day(inp):
 
 
 if __name__ == "__main__":
-    con = sqlite3.connect(os.path.join(DATA_DIR, "preprocessed_continuous_intraday_prices_and_volume.db"))
+    con = sqlite3.connect(
+        os.path.join(DATA_DIR, "preprocessed_continuous_intraday_prices_and_volume.db")
+    )
     sql_str = f"SELECT * FROM with_dummies WHERE Index_daily <= {trade_time} AND Time >= '2019-01-01 16:00:00' AND Day >= 62;"  # load only the data required for simu, so up to last trade time in the trajectory
     daily_data = pd.read_sql(sql_str, con)[
         [str(i) for i in range(192)] + ["288"]
