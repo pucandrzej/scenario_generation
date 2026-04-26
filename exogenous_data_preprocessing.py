@@ -119,7 +119,7 @@ for cty in border_ctys:
     # for PL we need to change the currency to EUR for data till 2019.11.19 (inclusively)
     if cty == "PL":
         pln_eur = pd.read_csv(
-            "Data/Day-Ahead-Quarterly-Data/PLN_EUR_2018_2019.csv", index_col=0
+            os.path.join(DATA_DIR, "Day-Ahead-Quarterly-Data", "PLN_EUR_2018_2019.csv"), index_col=0
         )["Price"]
         pln_eur.index = pd.to_datetime(pln_eur.index, format="%d-%m-%Y")
         pln_eur_resampled = pln_eur.sort_index().resample("1h").ffill()
@@ -142,7 +142,7 @@ for cty in border_ctys:
 all_de_border_prices = pd.concat(all_ctys_dfs, axis=1)
 
 all_de_border_prices.to_csv(
-    f"Data/Day-Ahead-Quarterly-Data/DE_and_all_DE_borders_hourly_day_ahead_prices.csv"
+    os.path.join(DATA_DIR, "Day-Ahead-Quarterly-Data", "DE_and_all_DE_borders_hourly_day_ahead_prices.csv")
 )
 
 check_for_missing_data(all_de_border_prices, required_start, required_end, freq="1h")
@@ -163,7 +163,7 @@ cty = "DE"
 da_price = []
 for year in range(2018, 2021):
     df = pd.read_csv(
-        f"Data/Day-Ahead-Quarterly-Data/DA_{cty}_Q_{year}.csv",
+        os.path.join(DATA_DIR, "Day-Ahead-Quarterly-Data", f"DA_{cty}_Q_{year}.csv"),
         na_values=["n/e"],
         index_col=0,
     )
@@ -197,7 +197,7 @@ da_price_all_years_dst_corrected = fill_march_dst(
 )
 
 da_price_all_years_dst_corrected.to_csv(
-    f"Data/Day-Ahead-Quarterly-Data/{cty}_quarterhourly_day_ahead_prices.csv"
+    os.path.join(DATA_DIR, "Day-Ahead-Quarterly-Data", f"{cty}_quarterhourly_day_ahead_prices.csv")
 )
 
 check_for_missing_data(
@@ -258,7 +258,7 @@ for cty in border_ctys:
     exchange = []
     for year in range(2018, 2021):
         df = pd.read_csv(
-            f"Data/Crossborder/crossborder_de_{cty.lower()}_{year}.csv",
+            os.path.join(DATA_DIR, "Crossborder", f"crossborder_de_{cty.lower()}_{year}.csv"),
             na_values=["n/e"],
             index_col=0,
         )
@@ -313,7 +313,7 @@ all_de_border_exchanges = pd.concat(all_ctys_exchange, axis=1)
 
 all_de_border_exchanges = all_de_border_exchanges.drop(columns="NO2")
 
-all_de_border_exchanges.to_csv(f"Data/Crossborder/DE_physexc.csv")
+all_de_border_exchanges.to_csv(os.path.join(DATA_DIR, "Crossborder", "DE_physexc.csv"))
 
 check_for_missing_data(all_de_border_exchanges, required_start, required_end, freq="1h")
 
@@ -328,7 +328,7 @@ for cty in border_ctys:
     exchange = []
     for year in range(2018, 2021):
         df = pd.read_csv(
-            f"Data/Crossborder/commex_de_{cty.lower()}_{year}.csv",
+            os.path.join(DATA_DIR, "Crossborder", f"commex_de_{cty.lower()}_{year}.csv"),
             na_values=["n/e"],
             index_col=0,
         )
@@ -378,7 +378,7 @@ for cty in border_ctys:
 
 all_de_border_exchanges = pd.concat(all_ctys_exchange, axis=1)
 
-all_de_border_exchanges.to_csv(f"Data/Crossborder/DE_commex.csv")
+all_de_border_exchanges.to_csv(os.path.join(DATA_DIR, "Crossborder", "DE_commex.csv"))
 
 check_for_missing_data(all_de_border_exchanges, required_start, required_end, freq="1h")
 
@@ -388,7 +388,7 @@ load = []
 for year in range(2018, 2021):
     load.append(
         pd.read_csv(
-            f"Data/Load/Total Load - Day Ahead _ Actual_{year}01010000-{year + 1}01010000.csv",
+            os.path.join(DATA_DIR, "Load", f"Total Load - Day Ahead _ Actual_{year}01010000-{year + 1}01010000.csv"),
             na_values=["n/e"],
         )
     )
@@ -419,7 +419,7 @@ check_for_missing_data(load_df, required_start, required_end, freq="15min")
 print("Processing the generation data...")
 gen = []
 for year in range(2018, 2021):
-    gen.append(pd.read_csv(f"Data/Generation/generation_{year}.csv", na_values=["n/e"]))
+    gen.append(pd.read_csv(os.path.join(DATA_DIR, "Generation", f"generation_{year}.csv"), na_values=["n/e"]))
 
 gen = pd.concat(gen, ignore_index=True)[
     [
@@ -449,7 +449,7 @@ gen_df.drop(columns="Time from", inplace=True)
 gen_fore = []
 for year in range(2018, 2021):
     gen_fore.append(
-        pd.read_csv(f"Data/Generation/generation_fore_{year}.csv", na_values=["n/e"])
+        pd.read_csv(os.path.join(DATA_DIR, "Generation", f"generation_fore_{year}.csv"), na_values=["n/e"])
     )
 
 gen_fore = pd.concat(gen_fore, ignore_index=True)[

@@ -14,17 +14,17 @@ from tqdm import tqdm
 
 import sqlite3
 import warnings
-from datetime import datetime, time, timedelta
-from zoneinfo import ZoneInfo  # Python 3.9+
+from datetime import datetime, timedelta
+from config.paths import DATA_DIR
 
 warnings.filterwarnings("ignore")
 
 # later use it as exog variable in the trajectory forecast for choosen deliveries and compare
 def initial_preprocessing():
 
-    if not os.path.exists(f"../Data/Transactions/quarterhourly_price_analysis_table_5min.csv"):
+    if not os.path.exists(os.path.join(DATA_DIR, "Transactions", "quarterhourly_price_analysis_table_5min.csv")):
         # load the complete dataset
-        if not os.path.exists("../Data/Transactions/concatenated_table.csv"):
+        if not os.path.exists(os.path.join(DATA_DIR, "Transactions", "concatenated_table.csv")):
             df = pd.concat(
                 [
                     pd.read_csv(
@@ -42,7 +42,7 @@ def initial_preprocessing():
                             "Trade ID",
                         ],
                     )
-                    for f in glob.glob("../Data/Transactions/*/*.csv")
+                    for f in glob.glob(os.path.join(DATA_DIR, "Transactions", "*", "*.csv"))
                 ]
             )
             df[
@@ -55,11 +55,11 @@ def initial_preprocessing():
                     "Date",
                 ]
             ].to_csv(
-                "../Data/Transactions/concatenated_table.csv"
+                os.path.join(DATA_DIR, "Transactions", "concatenated_table.csv")
             )
         else:
             df = pd.read_csv(
-                "../Data/Transactions/concatenated_table.csv",
+                os.path.join(DATA_DIR, "Transactions", "concatenated_table.csv"),
                 usecols=[
                     "Hour from",
                     "Hour to",
@@ -130,12 +130,12 @@ def initial_preprocessing():
             )
         df_copy["Datetime from"] = mod_trans_from
         df_copy["Datetime offer time"] = offer_time
-        df_copy.to_csv(f"../Data/Transactions/quarterhourly_price_analysis_table_5min.csv")
+        df_copy.to_csv(os.path.join(DATA_DIR, "Transactions", "quarterhourly_price_analysis_table_5min.csv"))
     print(
         "Preliminary preprocessed already performed. Performing additional preprocessing..."
     )
     # read the preprocessed dataset
-    df_copy = pd.read_csv(f"../Data/Transactions/quarterhourly_price_analysis_table_5min.csv")
+    df_copy = pd.read_csv(os.path.join(DATA_DIR, "Transactions", "quarterhourly_price_analysis_table_5min.csv"))
 
     # transform columns to datetime from string
     df_copy["Datetime offer time"] = pd.to_datetime(df_copy["Datetime offer time"])
@@ -221,19 +221,19 @@ def initial_preprocessing():
     df_copy = df_copy.drop("Hour to", axis=1)
 
     # save the resulting table of unevenly spaced trades with volume, prices and day of the week
-    df_copy.to_csv(f"../Data/quarterhourly_preprocessed_dataset_5min.csv", date_format="%s")
+    df_copy.to_csv(os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv"), date_format="%s")
 
 
 def preprocess_data(start, end, ID_qtrly, add_dummies):
     demanded_len = 32 * 12  # daily data len (all 5 min intervals)
     print("Cached data unavailable, preparing & saving the data.")
-    try:
-        df = pd.read_csv(f"../Data/quarterhourly_preprocessed_dataset_5min.csv")
-    except:
+    if os.path.exists(os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv")):
+        df = pd.read_csv(os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv"))
+    else:
         print("Preparing the initially preprocessed dataset...")
         initial_preprocessing()
         print("Done.")
-        df = pd.read_csv(f"../Data/quarterhourly_preprocessed_dataset_5min.csv")
+        df = pd.read_csv(os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv"))
     df["Datetime from"] = pd.to_datetime(df["Datetime from"])
     df["Datetime offer time"] = pd.to_datetime(df["Datetime offer time"])
     df = df[(df["Datetime from"] >= start) & ((df["Datetime from"]) < end)]
@@ -528,13 +528,13 @@ def preprocess_data(start, end, ID_qtrly, add_dummies):
         print(f"Done {d} of {len(np.unique(df['Datetime from'].dt.date))}")
 
 if __name__ == "__main__":
-    if not os.path.exists(f"quarterhourly_data_ID_5min_plus_indicators_paper_grade.db"):
-        con = sqlite3.connect(f"quarterhourly_data_ID_5min_plus_indicators_paper_grade.db")
+    if not os.path.exists(os.path.join(DATA_DIR, f"preprocessed_continuous_intraday_prices_and_volume.db")):
+        con = sqlite3.connect(os.path.join(DATA_DIR, f"preprocessed_continuous_intraday_prices_and_volume.db"))
     else:
-        os.remove(f"quarterhourly_data_ID_5min_plus_indicators_paper_grade.db")
-        con = sqlite3.connect(f"quarterhourly_data_ID_5min_plus_indicators_paper_grade.db")
+        os.remove(os.path.join(DATA_DIR, f"preprocessed_continuous_intraday_prices_and_volume.db"))
+        con = sqlite3.connect(os.path.join(DATA_DIR, f"preprocessed_continuous_intraday_prices_and_volume.db"))
 
-    ID_qtrly = pd.read_csv("../Data/ID_auction_preprocessed/ID_auction_price_2018-2020_preproc.csv", index_col=0, parse_dates=True)
+    ID_qtrly = pd.read_csv(os.path.join(DATA_DIR, "ID_auction_preprocessed", "ID_auction_price_2018-2020_preproc.csv"), index_col=0, parse_dates=True)
 
     preprocess_data(
         datetime(2018, 11, 1, 0, 0, 0),
