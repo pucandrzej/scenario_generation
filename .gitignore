@@ -226,3 +226,5 @@ Data/preprocessed_dataset.csv
 pyvenv311
 # ignore the intraday preprocessed dataset
 Data/preprocessed_continuous_intraday_prices_and_volume.db
+# ignore forecasting study results
+Forecasting/FORECASTING_STUDY_RESULTS
