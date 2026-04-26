@@ -7,7 +7,7 @@ from plotly.subplots import make_subplots
 import pandas as pd
 from datetime import timedelta
 
-from config.paths import DATA_DIR
+from config.paths import DATA_DIR, MARKET_DATA_DIR
 from config.test_calibration_validation import (
     required_start,
     required_end,
@@ -303,9 +303,7 @@ for delivery_time in tqdm(range(96)):
 
     first_trade_time = last_trade_time - information_shift
 
-    con = sqlite3.connect(
-        os.path.join(DATA_DIR, "preprocessed_continuous_intraday_prices_and_volume.db")
-    )
+    con = sqlite3.connect(MARKET_DATA_DIR)
     sql_str = f"SELECT * FROM with_dummies WHERE Index_daily <= {last_trade_time} AND Time >= '2018-12-31 16:00:00' AND Day >= 61;"  # load only the data required for simu, so up to trade time
     daily_data = pd.read_sql(sql_str, con)[
         [str(i) for i in range(192)] + ["288"]

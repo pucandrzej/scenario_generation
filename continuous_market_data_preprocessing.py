@@ -13,7 +13,13 @@ from tqdm import tqdm
 
 import sqlite3
 import warnings
-from config.paths import DATA_DIR, MARKET_DATA_DIR
+from config.paths import (
+    DATA_DIR,
+    MARKET_DATA_DIR,
+    INTERMEDIATE_MARKET_DATA,
+    CONCATENATED_RAW_MARKET_DATA,
+    INITIALLY_PREPROCESSED_MARKET_DATA,
+)
 from config.test_calibration_validation import (
     required_start,
     required_end,
@@ -28,15 +34,9 @@ warnings.filterwarnings("ignore")
 
 # later use it as exog variable in the trajectory forecast for choosen deliveries and compare
 def initial_preprocessing():
-    if not os.path.exists(
-        os.path.join(
-            DATA_DIR, "Transactions", "quarterhourly_price_analysis_table_5min.csv"
-        )
-    ):
+    if not os.path.exists(INTERMEDIATE_MARKET_DATA):
         # load the complete dataset
-        if not os.path.exists(
-            os.path.join(DATA_DIR, "Transactions", "concatenated_table.csv")
-        ):
+        if not os.path.exists(CONCATENATED_RAW_MARKET_DATA):
             df = pd.concat(
                 [
                     pd.read_csv(
@@ -68,10 +68,10 @@ def initial_preprocessing():
                     "Volume (MW)",
                     "Date",
                 ]
-            ].to_csv(os.path.join(DATA_DIR, "Transactions", "concatenated_table.csv"))
+            ].to_csv(CONCATENATED_RAW_MARKET_DATA)
         else:
             df = pd.read_csv(
-                os.path.join(DATA_DIR, "Transactions", "concatenated_table.csv"),
+                CONCATENATED_RAW_MARKET_DATA,
                 usecols=[
                     "Hour from",
                     "Hour to",
@@ -143,20 +143,12 @@ def initial_preprocessing():
             )
         df_copy["Datetime from"] = mod_trans_from
         df_copy["Datetime offer time"] = offer_time
-        df_copy.to_csv(
-            os.path.join(
-                DATA_DIR, "Transactions", "quarterhourly_price_analysis_table_5min.csv"
-            )
-        )
+        df_copy.to_csv(INTERMEDIATE_MARKET_DATA)
     print(
         "Preliminary preprocessed already performed. Performing additional preprocessing..."
     )
     # read the preprocessed dataset
-    df_copy = pd.read_csv(
-        os.path.join(
-            DATA_DIR, "Transactions", "quarterhourly_price_analysis_table_5min.csv"
-        )
-    )
+    df_copy = pd.read_csv(INTERMEDIATE_MARKET_DATA)
 
     # transform columns to datetime from string
     df_copy["Datetime offer time"] = pd.to_datetime(df_copy["Datetime offer time"])
@@ -219,7 +211,7 @@ def initial_preprocessing():
 
     # save the resulting table of unevenly spaced trades with volume, prices and day of the week
     df_copy.to_csv(
-        os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv"),
+        INITIALLY_PREPROCESSED_MARKET_DATA,
         date_format="%s",
     )
 
@@ -227,19 +219,13 @@ def initial_preprocessing():
 def preprocess_data(start, end, ID_qtrly, add_dummies):
     demanded_len = 32 * 12  # daily data len (all 5 min intervals)
     print("Cached data unavailable, preparing & saving the data.")
-    if os.path.exists(
-        os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv")
-    ):
-        df = pd.read_csv(
-            os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv")
-        )
+    if os.path.exists(INITIALLY_PREPROCESSED_MARKET_DATA):
+        df = pd.read_csv(INITIALLY_PREPROCESSED_MARKET_DATA)
     else:
         print("Preparing the initially preprocessed dataset...")
         initial_preprocessing()
         print("Done.")
-        df = pd.read_csv(
-            os.path.join(DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv")
-        )
+        df = pd.read_csv(INITIALLY_PREPROCESSED_MARKET_DATA)
     df["Datetime from"] = pd.to_datetime(df["Datetime from"])
     df["Datetime offer time"] = pd.to_datetime(df["Datetime offer time"])
     df = df[(df["Datetime from"] >= start) & ((df["Datetime from"]) < end)]

@@ -6,4 +6,13 @@ DATA_DIR = os.path.join(ROOT, "Data")
 MARKET_DATA_DIR = os.path.join(
     ROOT, "Data", "preprocessed_continuous_intraday_prices_and_volume.db"
 )
+CONCATENATED_RAW_MARKET_DATA = os.path.join(
+    DATA_DIR, "Transactions", "concatenated_table.csv"
+)
+INTERMEDIATE_MARKET_DATA = os.path.join(
+    DATA_DIR, "Transactions", "quarterhourly_price_analysis_table_5min.csv"
+)
+INITIALLY_PREPROCESSED_MARKET_DATA = os.path.join(
+    DATA_DIR, "quarterhourly_preprocessed_dataset_5min.csv"
+)
 LOGS_DIR = os.path.join(ROOT, "LOGS")
