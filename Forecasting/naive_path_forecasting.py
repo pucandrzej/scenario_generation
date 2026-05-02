@@ -203,41 +203,23 @@ if __name__ == "__main__":
             ]
             for idx, date in enumerate(dates_calibration)
         ]
-        try:
-            with Pool(
-                processes=int(args.processes),
-                initializer=init_worker,
-                initargs=(raw_arr, data_shape),
-            ) as p:
-                _ = p.map(run_one_day, inputlist_calibration)
-        except Exception as exception:
-            print(f"Failed pool due to {exception}. Restarting with 15 workers")
-            with Pool(
-                processes=15,
-                initializer=init_worker,
-                initargs=(raw_arr, data_shape),
-            ) as p:
-                _ = p.map(run_one_day, inputlist_calibration)
+        with Pool(
+            processes=int(args.processes),
+            initializer=init_worker,
+            initargs=(raw_arr, data_shape),
+        ) as p:
+            _ = p.map(run_one_day, inputlist_calibration)
 
         inputlist = [
             [lookback + idx + 1, date, forecasting_horizon, "test"]
             for idx, date in enumerate(dates)
         ]
-        try:
-            with Pool(
-                processes=int(args.processes),
-                initializer=init_worker,
-                initargs=(raw_arr, data_shape),
-            ) as p:
-                _ = p.map(run_one_day, inputlist)
-        except Exception as exception:
-            print(f"Failed pool due to {exception}. Restarting with 15 workers")
-            with Pool(
-                processes=15,
-                initializer=init_worker,
-                initargs=(raw_arr, data_shape),
-            ) as p:
-                _ = p.map(run_one_day, inputlist)
+        with Pool(
+            processes=int(args.processes),
+            initializer=init_worker,
+            initargs=(raw_arr, data_shape),
+        ) as p:
+            _ = p.map(run_one_day, inputlist)
 
     else:
         inputlist = [
