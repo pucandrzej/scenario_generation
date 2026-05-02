@@ -35,11 +35,11 @@ args = parser.parse_args()
 
 start = args.start_delivery
 sys.stderr = open(
-    f"TOTAL_SIMU_ERR_{start}_{args.end_delivery}_benchmark_{args.calibration_window_len}.txt",
+    f"BENCHMARK_SIMU_ERR_{start}_{args.end_delivery}_benchmark_{args.calibration_window_len}.txt",
     "w",
 )
 sys.stdout = open(
-    f"TOTAL_SIMU_LOG_{start}_{args.end_delivery}_benchmark_{args.calibration_window_len}.txt",
+    f"BENCHMARK_SIMU_LOG_{start}_{args.end_delivery}_benchmark_{args.calibration_window_len}.txt",
     "w",
 )
 

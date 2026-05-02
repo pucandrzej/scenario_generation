@@ -36,8 +36,8 @@ def load_exogenous_to_cache(cache, first_training_date, delivery_time, data_root
     The helper load_csv() is now defined above, NOT inside this function.
     """
 
-    cutoff = (
-        first_training_date - pd.Timedelta(days=1)
+    cutoff = first_training_date - pd.Timedelta(
+        days=1
     )  # always loading one day more as we are touching/crossing the midnight with some paths
 
     # ---------- Load datasets ----------

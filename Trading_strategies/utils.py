@@ -414,8 +414,8 @@ def compute_weights(
 
         # scale the weights so that they sum to 1
         s = np.sum(raw)
-        if (
-            s == 0 or not np.isfinite(s)
+        if s == 0 or not np.isfinite(
+            s
         ):  # it can happen that the error is large and we are not able to scale efficiently with any of our paths
             N = raw.size
             return np.ones(N) / N

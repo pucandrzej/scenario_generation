@@ -17,8 +17,13 @@ import sqlite3
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.multioutput import RegressorChain
 
-from config.paths import DATA_DIR
-from .utils import (
+from config.paths import (
+    DATA_DIR,
+    MODEL_RESULTS_DIR,
+    RAW_MODEL_RESULTS_DIR,
+    TIMING_RESULTS_DIR,
+)
+from .forecasting_utils import (
     my_mae,
     filter_scenarios,
     load_exogenous_to_cache,
@@ -29,13 +34,43 @@ from .utils import (
     build_weather_scenarios_and_similarity,
     check_wasserstein_stopping,
 )
+from config.forecasting_simulation_config import (
+    last_trade_time_in_path_delta,
+    calib_window_days_no,
+    forecasting_horizon,
+    first_trading_start_of_simulation,
+    first_day_index_of_simulation,
+    needed_columns_of_continuous_preprocessed_data,
+    total_no_of_cont_market_columns,
+)
+from config.test_calibration_validation import (
+    validation_window_start,
+    validation_window_end,
+    required_start_pd_timestamp,
+)
+from config.csvr_model_config import (
+    q_kernel,
+    q_kernel_naive,
+    q_data,
+    q_data_naive,
+    svr_epsilon,
+    C,
+)
+from config.model_scenario_generation_config import (
+    quantile_diff_tolerance,
+    min_scenarios,
+    wasserstein_moving_avg_window,
+    weather_scenarios_split_direction,
+)
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--daterange_start", default="2020-01-01", help="Start of evaluation window."
+    "--daterange_start",
+    default=validation_window_start,
+    help="Start of evaluation window.",
 )
 parser.add_argument(
-    "--daterange_end", default="2020-12-31", help="End of evaluation window."
+    "--daterange_end", default=validation_window_end, help="End of evaluation window."
 )
 parser.add_argument("--lookback", default=364, help="Training window length.")
 parser.add_argument(
@@ -45,12 +80,12 @@ parser.add_argument(
 )
 parser.add_argument(
     "--trade_time",
-    default=32 * 3 + 8 * 12 - 6,
+    default=32 * 3 + last_trade_time_in_path_delta,
     help="index of the last 5min interval before the delivery that we want to trade in.",
 )
 parser.add_argument(
     "--calibration_window_len",
-    default=182,
+    default=calib_window_days_no,
     help="For every date consider a historical results from a calibration window.",
 )
 parser.add_argument(
@@ -85,19 +120,7 @@ parser.add_argument(
 parser.add_argument("--processes", default=1, help="No of processes")
 
 # HAND-PICKED PARAMETERS
-first_training_date = pd.Timestamp(year=2019, month=1, day=2)
-q_kernel = 0.75  # WARNING only for q >= 1/2
-q_kernel_naive = 0.75  # WARNING only for q >= 1/2
-q_data = 0.5
-q_data_naive = 0.75
-svr_epsilon = 0.1
-C = 1
-kernel_power = 2
-quantile_diff_tolerance = 1e-2
-forecasting_horizon = 31
-min_scenarios = 10  # minimum no. of scenarios required when iterating over scenarios with Wasserstein stopping crit
-wasserstein_moving_avg_window = 10  # note that this automatically gives default 12 scenarios minimum as we start from Wasserstein = inf so first 10 deltas contain inf
-weather_scenarios_split_direction = True
+first_training_date = required_start_pd_timestamp
 
 args = parser.parse_args()
 if args.required_scenarios is not None:
@@ -112,26 +135,20 @@ trade_time = int(args.trade_time)
 delivery_time = int(args.delivery_time)
 calibration_window_len = int(args.calibration_window_len)
 
-results_folname = "FORECASTING_STUDY_RESULTS"
-specific_results_folname = f"{start}_{end}_{lookback}_{delivery_time}_{[forecasting_horizon]}_{trade_time}_{args.probab_approach}_{args.required_scenarios}_{args.wasserstein_stopping_crit}_{args.scenarios_sampling_method}"
+specific_results_folname = f"{start}_{end}_{lookback}_{delivery_time}_{forecasting_horizon}_{trade_time}_{args.probab_approach}_{args.required_scenarios}_{args.wasserstein_stopping_crit}_{args.scenarios_sampling_method}"
 
 if args.special_results_directory is not None:
-    results_folname = os.path.join(args.special_results_directory, results_folname)
+    MODEL_RESULTS_DIR = os.path.join(
+        args.special_results_directory, RAW_MODEL_RESULTS_DIR
+    )
 
-if not os.path.exists(os.path.join(results_folname)):
-    os.mkdir(os.path.join(results_folname))
-if not os.path.exists(
+os.makedirs(
     os.path.join(
-        results_folname,
+        MODEL_RESULTS_DIR,
         specific_results_folname,
-    )
-):
-    os.mkdir(
-        os.path.join(
-            results_folname,
-            specific_results_folname,
-        )
-    )
+    ),
+    exist_ok=True,
+)
 
 dates = pd.date_range(start, end)
 dates_calibration = pd.date_range(
@@ -139,18 +156,19 @@ dates_calibration = pd.date_range(
     pd.to_datetime(start) - pd.Timedelta(days=1),
 )
 
-# A global dictionary storing the variables passed from the initializer.
+# a global dictionary storing the data and data shape passed from the initializer.
 var_dict = {}
 
 
 def init_worker(Model_data, Model_data_shape):
-    # Using a dictionary is not strictly necessary. You can also
-    # use global variables.
+    """Function used to manage the data sharing between parallel forecasters."""
     var_dict["Model_data"] = Model_data
     var_dict["Model_data_shape"] = Model_data_shape
 
 
-class LaplaceKernelWrapper:
+class CorrectedSVRKernelWrapper:
+    """Wrapper for cSVR kernel, allowing for applying kernel correction in path forecasting setting"""
+
     def __init__(self):
         self.X_train = None
 
@@ -161,7 +179,7 @@ class LaplaceKernelWrapper:
             self.X_train = X
             if (
                 args.probab_approach == "weather_scenarios"
-            ):  # run ram inefficient but overall faster version for weather scenarios
+            ):  # run ram inefficient but faster version for weather scenarios
                 return multifore_corrected_laplace_kernel(
                     X, Y, q_kernel, q_data, q_data_naive, q_kernel_naive, is_train=True
                 )
@@ -176,7 +194,7 @@ class LaplaceKernelWrapper:
             # Prediction phase: Y is the training data
             if (
                 args.probab_approach == "weather_scenarios"
-            ):  # run ram inefficient but overall faster version for weather scenarios
+            ):  # run ram inefficient but faster version for weather scenarios
                 return multifore_corrected_laplace_kernel(
                     X, Y, q_kernel, q_data, q_data_naive, q_kernel_naive, is_train=False
                 )
@@ -189,6 +207,7 @@ class LaplaceKernelWrapper:
 
 
 def run_one_day(inp):
+    """Function used to forecast for one day, one delivery."""
     idx = inp[0]
     date_fore = inp[1]
     forecasting_horizon = inp[2]
@@ -207,7 +226,9 @@ def run_one_day(inp):
         np.frombuffer(var_dict["Model_data"]).reshape(var_dict["Model_data_shape"]),
         1,
         2,
-    )[:idx, :, :]  # swapaxes needed after migration from np array to database
+    )[
+        :idx, :, :
+    ]  # swapaxes needed after migration from np array to database
 
     if np.shape(daily_data_window)[-1] <= forecasting_horizon:
         raise ValueError(
@@ -420,7 +441,7 @@ def run_one_day(inp):
         )
 
     kernel_function = (
-        LaplaceKernelWrapper()
+        CorrectedSVRKernelWrapper()
     )  # custom kernel functions wrapped in a kernel class
 
     training_data = training_window_fundamental_plus_price
@@ -555,7 +576,7 @@ def run_one_day(inp):
     results_filename = f"{calibration_flag}_{str((pd.to_datetime(date_fore) - pd.Timedelta(days=1)).replace(hour=16) + pd.Timedelta(minutes=5 * (trade_time - 1))).replace(':', ';')}_{forecasting_horizon}.csv"
 
     result_file_name = os.path.join(
-        f"{results_folname}",
+        MODEL_RESULTS_DIR,
         specific_results_folname,
         results_filename,
     )
@@ -573,12 +594,17 @@ if __name__ == "__main__":
     con = sqlite3.connect(
         os.path.join(DATA_DIR, "preprocessed_continuous_intraday_prices_and_volume.db")
     )
-    sql_str = f"SELECT * FROM with_dummies WHERE Index_daily <= {trade_time} AND Time >= '2019-01-01 16:00:00' AND Day >= 62;"  # load only the data required for simu, so up to last trade time in the trajectory
+    sql_str = f"SELECT * FROM with_dummies WHERE Index_daily <= {trade_time} AND Time >= '{first_trading_start_of_simulation}' AND Day >= {first_day_index_of_simulation};"  # load only the data required for simu, so up to last trade time in the trajectory
     daily_data = pd.read_sql(sql_str, con)[
-        [str(i) for i in range(192)] + ["288"]
+        needed_columns_of_continuous_preprocessed_data
     ].to_numpy()  # column 288 contains weekday no. indicators
     daily_data = np.reshape(
-        daily_data, (np.shape(daily_data)[0] // trade_time, trade_time, 193)
+        daily_data,
+        (
+            np.shape(daily_data)[0] // trade_time,
+            trade_time,
+            total_no_of_cont_market_columns,
+        ),
     )  # making it a shape of [days, total steps in trajectory, variables no.]
 
     raw_arr = RawArray(
@@ -606,21 +632,12 @@ if __name__ == "__main__":
             ]
             for idx, date in enumerate(dates_calibration)
         ]
-        try:
-            with Pool(
-                processes=int(args.processes),
-                initializer=init_worker,
-                initargs=(raw_arr, data_shape),
-            ) as p:
-                _ = p.map(run_one_day, inputlist_calibration)
-        except Exception as exception:
-            print(f"Failed pool due to {exception}. Restarting with 15 workers")
-            with Pool(
-                processes=15,
-                initializer=init_worker,
-                initargs=(raw_arr, data_shape),
-            ) as p:
-                _ = p.map(run_one_day, inputlist_calibration)
+        with Pool(
+            processes=int(args.processes),
+            initializer=init_worker,
+            initargs=(raw_arr, data_shape),
+        ) as p:
+            _ = p.map(run_one_day, inputlist_calibration)
 
         inputlist = [
             [
@@ -631,21 +648,12 @@ if __name__ == "__main__":
             ]
             for idx, date in enumerate(dates)
         ]
-        try:
-            with Pool(
-                processes=int(args.processes),
-                initializer=init_worker,
-                initargs=(raw_arr, data_shape),
-            ) as p:
-                _ = p.map(run_one_day, inputlist)
-        except Exception as exception:
-            print(f"Failed pool due to {exception}. Restarting with 15 workers")
-            with Pool(
-                processes=15,
-                initializer=init_worker,
-                initargs=(raw_arr, data_shape),
-            ) as p:
-                _ = p.map(run_one_day, inputlist)
+        with Pool(
+            processes=int(args.processes),
+            initializer=init_worker,
+            initargs=(raw_arr, data_shape),
+        ) as p:
+            _ = p.map(run_one_day, inputlist)
 
     else:
         inputlist = [
@@ -666,6 +674,10 @@ if __name__ == "__main__":
     simu_end = time.time()
     print(simu_end - simu_start, "Total time of simulation:")
     with open(
-        f"timing_results_model_d_{delivery_time}_t_{trade_time}.txt", "w"
+        os.path.join(
+            TIMING_RESULTS_DIR,
+            f"timing_results_model_d_{delivery_time}_t_{trade_time}.txt",
+        ),
+        "w",
     ) as file:
         file.write(f"Execution time: {simu_end - simu_start} seconds\n")

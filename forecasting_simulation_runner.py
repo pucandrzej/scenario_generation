@@ -67,19 +67,17 @@ print(  # show all of the configs to run
 )
 
 # declare the location of logs
-os.makedirs(LOGS_DIR, exist_ok=True)
-
 sys.stderr = open(
     os.path.join(
         LOGS_DIR,
-        f"TOTAL_SIMU_ERR_{start}_{end}_{args.calibration_window_len}.txt",
+        f"SIMU_ERR_{start}_{end}_{args.calibration_window_len}.txt",
     ),
     "w",
 )
 sys.stdout = open(
     os.path.join(
         LOGS_DIR,
-        f"TOTAL_SIMU_LOG_{start}_{end}_{args.calibration_window_len}.txt",
+        f"SIMU_LOG_{start}_{end}_{args.calibration_window_len}.txt",
     ),
     "w",
 )

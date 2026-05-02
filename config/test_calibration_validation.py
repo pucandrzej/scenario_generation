@@ -1,7 +1,12 @@
+import pandas as pd
 from datetime import datetime
 
-required_start = datetime(2019, 1, 1)
+required_start = datetime(2019, 1, 2)
+required_start_pd_timestamp = pd.Timestamp(year=2019, month=1, day=2)
 required_end = datetime(2021, 1, 1)
+
+validation_window_start = "2020-01-01"
+validation_window_end = "2020-12-31"
 
 currency_change_date_PL = datetime(2019, 11, 20)
 

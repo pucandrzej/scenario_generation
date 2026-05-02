@@ -14,7 +14,7 @@ from multiprocessing import Pool, RawArray
 
 import sqlite3
 
-from config.paths import MARKET_DATA_DIR
+from config.paths import MARKET_DATA_DIR, TIMING_RESULTS_DIR, BENCHMARK_RESULTS_DIR
 from config.test_calibration_validation import (
     validation_window_start,
     validation_window_end,
@@ -73,10 +73,9 @@ if args.required_scenarios is not None:
 else:
     required_scenarios = args.required_scenarios
 
-results_folname = "BENCHMARK_RESULTS"
 os.makedirs(
     os.path.join(
-        results_folname,
+        BENCHMARK_RESULTS_DIR,
         f"{start}_{end}_{lookback}_{delivery_time}_{forecasting_horizon}_{trade_time}_____{args.required_scenarios}____",
     ),
     exist_ok=True,
@@ -108,7 +107,7 @@ def run_one_day(inp):
     """
     GATHERING THE REQUIRED DATA
     """
-    # to compare ourselves with Ziel results we want to 185-30 min before delivery periods, 31 5min intervals
+    # to compare ourselves with results from previous papers, we want to 185-30 min before delivery periods, 31 5min intervals
 
     daily_data_window = np.swapaxes(
         np.frombuffer(var_dict["Model_data"]).reshape(var_dict["Model_data_shape"]),
@@ -146,7 +145,7 @@ def run_one_day(inp):
     )
 
     result_file_name = os.path.join(
-        f"{results_folname}",
+        BENCHMARK_RESULTS_DIR,
         f"{start}_{end}_{lookback}_{delivery_time}_{forecasting_horizon}_{trade_time}_____{args.required_scenarios}____",
         f"{calibration_flag}_{str((pd.to_datetime(date_fore) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=5 * (trade_time - 1))).replace(':', ';')}_{forecasting_horizon}___weights___window__.csv",
     )
@@ -236,7 +235,7 @@ if __name__ == "__main__":
     print(simu_end - simu_start, "Total time of simulation:")
     with open(
         os.path.join(
-            "TIMING_RESULTS",
+            TIMING_RESULTS_DIR,
             f"timing_results_benchmark_d_{delivery_time}_t_{trade_time}.txt",
         ),
         "w",

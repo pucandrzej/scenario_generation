@@ -75,9 +75,7 @@ def filter_scenarios(
                     weights[idx] += abs(alpha)
 
         # 3. sort the scenarios based on the dual coefficient
-        required_scenarios_indices = np.argsort(
-            weights
-        )[
+        required_scenarios_indices = np.argsort(weights)[
             ::-1
         ]  # argsort is sorting in increasing order, we want it in decreasing thus [::-1]
 
@@ -392,7 +390,9 @@ def build_weather_scenarios_and_similarity(
                 )[-total_training_days_available:]
             )
 
-        if only_similarity:  # we do not want to collect the weather scenarios in case of historical simulation
+        if (
+            only_similarity
+        ):  # we do not want to collect the weather scenarios in case of historical simulation
             continue
 
         # ---- build weather scenarios for future path intervals ----
