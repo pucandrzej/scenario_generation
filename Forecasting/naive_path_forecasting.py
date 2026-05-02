@@ -14,31 +14,42 @@ from multiprocessing import Pool, RawArray
 
 import sqlite3
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--model", default="benchmark", help="Model for forecasting")
-parser.add_argument(
-    "--daterange_start", default="2020-01-01", help="Start of eval data"
+from config.paths import MARKET_DATA_DIR
+from config.test_calibration_validation import (
+    validation_window_start,
+    validation_window_end,
 )
-parser.add_argument("--daterange_end", default="2020-12-31", help="End of eval data")
+from config.forecasting_simulation_config import (
+    last_trade_time_in_path_delta,
+    calib_window_days_no,
+    forecasting_horizon,
+    first_trading_start_of_simulation,
+    needed_columns_of_continuous_preprocessed_data,
+    first_day_index_of_simulation,
+    total_no_of_cont_market_columns,
+)
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--daterange_start", default=validation_window_start, help="Start of eval data"
+)
+parser.add_argument(
+    "--daterange_end", default=validation_window_end, help="End of eval data"
+)
 parser.add_argument("--lookback", default=364, help="Min. training window length")
 parser.add_argument(
     "--delivery_time",
-    default=0,
+    default=32,
     help="Index from 0 to 95 of the delivery quarter of the day",
 )
 parser.add_argument(
-    "--forecasting_horizons",
-    default=[31],
-    help="5min intervals from the forecast to the trade that we want to forecast price for. In practice from 185 to 30 minutes before the delivery.",
-)
-parser.add_argument(
     "--trade_time",
-    default=0 * 3 + 8 * 12 - 6,
+    default=32 * 3 + last_trade_time_in_path_delta,
     help="Last 5min interval before the delivery that we want to trade in.",
 )
 parser.add_argument(
     "--calibration_window_len",
-    default=182,
+    default=calib_window_days_no,
     help="For every date consider a historical results from a calibration window.",
 )
 parser.add_argument("--processes", default=1, help="No of processes")
@@ -48,14 +59,12 @@ parser.add_argument(
     help='Number of the most recent scenarios to be used for SVR path scenarios recalculation if scenarios_sampling_method is "latest". Cannot exceed the sample length.',
 )
 
-paths_no = 1000
+PATHS_NO = 1000  # number of naive paths scenarios to simulate
 
 args = parser.parse_args()
-model = args.model
 start = args.daterange_start
 end = args.daterange_end
 lookback = int(args.lookback)
-forecasting_horizons = args.forecasting_horizons
 trade_time = int(args.trade_time)
 delivery_time = int(args.delivery_time)
 calibration_window_len = int(args.calibration_window_len)
@@ -65,22 +74,13 @@ else:
     required_scenarios = args.required_scenarios
 
 results_folname = "BENCHMARK_RESULTS"
-
-if not os.path.exists(os.path.join(results_folname)):
-    os.mkdir(os.path.join(results_folname))
-for forecasting_horizon in forecasting_horizons:
-    if not os.path.exists(
-        os.path.join(
-            results_folname,
-            f"{model}_{start}_{end}_{lookback}_{delivery_time}_{[forecasting_horizon]}_{trade_time}_____{args.required_scenarios}____",
-        )
-    ):
-        os.mkdir(
-            os.path.join(
-                results_folname,
-                f"{model}_{start}_{end}_{lookback}_{delivery_time}_{[forecasting_horizon]}_{trade_time}_____{args.required_scenarios}____",
-            )
-        )
+os.makedirs(
+    os.path.join(
+        results_folname,
+        f"{start}_{end}_{lookback}_{delivery_time}_{forecasting_horizon}_{trade_time}_____{args.required_scenarios}____",
+    ),
+    exist_ok=True,
+)
 
 dates = pd.date_range(start, end)
 dates_calibration = pd.date_range(
@@ -103,8 +103,7 @@ def run_one_day(inp):
     idx = inp[0]
     date_fore = inp[1]
     forecasting_horizon = inp[2]
-    model = inp[3]
-    calibration_flag = inp[4]
+    calibration_flag = inp[3]
 
     """
     GATHERING THE REQUIRED DATA
@@ -115,7 +114,9 @@ def run_one_day(inp):
         np.frombuffer(var_dict["Model_data"]).reshape(var_dict["Model_data_shape"]),
         1,
         2,
-    )[:idx, :, :]  # swapaxes needed after migration from np array to database
+    )[
+        :idx, :, :
+    ]  # swapaxes needed after migration from np array to database
 
     Y = (
         daily_data_window[:, delivery_time, -forecasting_horizon:]
@@ -131,7 +132,7 @@ def run_one_day(inp):
     if required_scenarios is not None:
         Y_historical = Y_historical[-required_scenarios:, :]
     sampled_indices = np.random.choice(
-        Y_historical.shape[0], size=paths_no, replace=True
+        Y_historical.shape[0], size=PATHS_NO, replace=True
     )
     sampled_Y = Y_historical[sampled_indices, :]
     sampled_cumsum = np.cumsum(sampled_Y, axis=1)
@@ -146,7 +147,7 @@ def run_one_day(inp):
 
     result_file_name = os.path.join(
         f"{results_folname}",
-        f"{model}_{start}_{end}_{lookback}_{delivery_time}_{[forecasting_horizon]}_{trade_time}_____{args.required_scenarios}____",
+        f"{start}_{end}_{lookback}_{delivery_time}_{forecasting_horizon}_{trade_time}_____{args.required_scenarios}____",
         f"{calibration_flag}_{str((pd.to_datetime(date_fore) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=5 * (trade_time - 1))).replace(':', ';')}_{forecasting_horizon}___weights___window__.csv",
     )
 
@@ -163,13 +164,18 @@ def run_one_day(inp):
 
 
 if __name__ == "__main__":
-    con = sqlite3.connect("quarterhourly_data_ID_5min_plus_indicators_paper_grade.db")
-    sql_str = f"SELECT * FROM with_dummies WHERE Index_daily <= {trade_time} AND Time >= '2019-01-01 16:00:00' AND Day >= 62;"  # load only the data required for simu, so up to last trade time in the trajectory
+    con = sqlite3.connect(MARKET_DATA_DIR)
+    sql_str = f"SELECT * FROM with_dummies WHERE Index_daily <= {trade_time} AND Time >= '{first_trading_start_of_simulation}' AND Day >= {first_day_index_of_simulation};"  # load only the data required for simu, so up to last trade time in the trajectory
     daily_data = pd.read_sql(sql_str, con)[
-        [str(i) for i in range(192)] + ["288"]
+        needed_columns_of_continuous_preprocessed_data
     ].to_numpy()
     daily_data = np.reshape(
-        daily_data, (np.shape(daily_data)[0] // trade_time, trade_time, 193)
+        daily_data,
+        (
+            np.shape(daily_data)[0] // trade_time,
+            trade_time,
+            total_no_of_cont_market_columns,
+        ),
     )  # making it a shape of [days, total steps in trajectory, variables no.]
 
     raw_arr = RawArray(
@@ -187,68 +193,70 @@ if __name__ == "__main__":
     del daily_data
 
     simu_start = time.time()
-    for forecasting_horizon in forecasting_horizons:
-        if calibration_window_len > 0:  # perform the calibration forecast
-            inputlist_calibration = [
-                [
-                    lookback - calibration_window_len + idx + 1,
-                    date,
-                    forecasting_horizon,
-                    model,
-                    "calibration",
-                ]
-                for idx, date in enumerate(dates_calibration)
+    if calibration_window_len > 0:  # perform the calibration forecast
+        inputlist_calibration = [
+            [
+                lookback - calibration_window_len + idx + 1,
+                date,
+                forecasting_horizon,
+                "calibration",
             ]
-            try:
-                with Pool(
-                    processes=int(args.processes),
-                    initializer=init_worker,
-                    initargs=(raw_arr, data_shape),
-                ) as p:
-                    _ = p.map(run_one_day, inputlist_calibration)
-            except Exception as exception:
-                print(f"Failed pool due to {exception}. Restarting with 15 workers")
-                with Pool(
-                    processes=15,
-                    initializer=init_worker,
-                    initargs=(raw_arr, data_shape),
-                ) as p:
-                    _ = p.map(run_one_day, inputlist_calibration)
+            for idx, date in enumerate(dates_calibration)
+        ]
+        try:
+            with Pool(
+                processes=int(args.processes),
+                initializer=init_worker,
+                initargs=(raw_arr, data_shape),
+            ) as p:
+                _ = p.map(run_one_day, inputlist_calibration)
+        except Exception as exception:
+            print(f"Failed pool due to {exception}. Restarting with 15 workers")
+            with Pool(
+                processes=15,
+                initializer=init_worker,
+                initargs=(raw_arr, data_shape),
+            ) as p:
+                _ = p.map(run_one_day, inputlist_calibration)
 
-            inputlist = [
-                [lookback + idx + 1, date, forecasting_horizon, model, "test"]
-                for idx, date in enumerate(dates)
-            ]
-            try:
-                with Pool(
-                    processes=int(args.processes),
-                    initializer=init_worker,
-                    initargs=(raw_arr, data_shape),
-                ) as p:
-                    _ = p.map(run_one_day, inputlist)
-            except Exception as exception:
-                print(f"Failed pool due to {exception}. Restarting with 15 workers")
-                with Pool(
-                    processes=15,
-                    initializer=init_worker,
-                    initargs=(raw_arr, data_shape),
-                ) as p:
-                    _ = p.map(run_one_day, inputlist)
-
-        else:
-            inputlist = [
-                [lookback + idx + 1, date, forecasting_horizon, model, "test"]
-                for idx, date in enumerate(dates)
-            ]
+        inputlist = [
+            [lookback + idx + 1, date, forecasting_horizon, "test"]
+            for idx, date in enumerate(dates)
+        ]
+        try:
             with Pool(
                 processes=int(args.processes),
                 initializer=init_worker,
                 initargs=(raw_arr, data_shape),
             ) as p:
                 _ = p.map(run_one_day, inputlist)
+        except Exception as exception:
+            print(f"Failed pool due to {exception}. Restarting with 15 workers")
+            with Pool(
+                processes=15,
+                initializer=init_worker,
+                initargs=(raw_arr, data_shape),
+            ) as p:
+                _ = p.map(run_one_day, inputlist)
+
+    else:
+        inputlist = [
+            [lookback + idx + 1, date, forecasting_horizon, "test"]
+            for idx, date in enumerate(dates)
+        ]
+        with Pool(
+            processes=int(args.processes),
+            initializer=init_worker,
+            initargs=(raw_arr, data_shape),
+        ) as p:
+            _ = p.map(run_one_day, inputlist)
     simu_end = time.time()
     print(simu_end - simu_start, "Total time of simulation:")
     with open(
-        f"timing_results_model_{model}_d_{delivery_time}_t_{trade_time}.txt", "w"
+        os.path.join(
+            "TIMING_RESULTS",
+            f"timing_results_benchmark_d_{delivery_time}_t_{trade_time}.txt",
+        ),
+        "w",
     ) as file:
         file.write(f"Execution time: {simu_end - simu_start} seconds\n")
