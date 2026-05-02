@@ -1,6 +1,4 @@
-"""
-File contains the code for LASSO forecast of continuous market prices on DE intraday market.
-"""
+"""File contains the code for LASSO forecast of continuous market prices on DE intraday market."""
 
 import pandas as pd
 import numpy as np

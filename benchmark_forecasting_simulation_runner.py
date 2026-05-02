@@ -1,4 +1,4 @@
-"""Runner of the naive benchmark path forecasting simulation for all the deliveries and configurations"""
+"""Runner of the naive benchmark path forecasting simulation for all the deliveries"""
 
 import sys
 import time

@@ -229,3 +229,4 @@ Data/preprocessed_continuous_intraday_prices_and_volume.db
 # ignore forecasting study results
 FORECASTING_STUDY_RESULTS
 LOGS
+MAE_CRPS_RESULTS
