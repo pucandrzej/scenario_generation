@@ -2,8 +2,6 @@ import os
 import sqlite3
 import numpy as np
 from tqdm import tqdm
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import pandas as pd
 from datetime import timedelta
 
@@ -12,16 +10,23 @@ from config.test_calibration_validation import (
     required_start,
     required_end,
 )
-from utils import fill_march_dst_daily, check_for_missing_data
+from config.forecasting_simulation_config import deliveries_no, forecasting_horizon, trading_start_hour, first_trading_start_of_simulation, first_day_index_of_simulation, needed_columns_of_continuous_preprocessed_data, total_no_of_cont_market_columns
 
-DEVEL_PLOTS = False
+from utils import fill_march_dst_daily, check_for_missing_data, devel_elasticities_plot, price2vol_sup, price2vol_dem, sup_trans_inv, S_trans
 
+DEVEL_PLOTS = True
+VOLUME_DELTAS = [
+    500,
+    1000,
+    2000,
+]
+LOWER_TECHNICAL_MINIMUM = -3000
 
 def compute_transformed_supply_elasticity(
     df_curve,
     P_clearing,
     P_auction,
-    q,
+    volume_delta,
     forecasting_date,
     P_min=-3000,
     side_supply="Sell",
@@ -30,7 +35,7 @@ def compute_transformed_supply_elasticity(
     """
     - df_curve: DataFrame with columns ["Price","Volume","Sale/Purchase"].
     - P_clearing: observed clearing price P_{DA} (intraday price).
-    - q: volume offset for finite-difference.
+    - volume_delta: volume offset for finite-difference.
     - P_min: floor price (e.g. -3000).
     Returns: elasticity and shows 3-panel plots.
     """
@@ -46,24 +51,12 @@ def compute_transformed_supply_elasticity(
     df_sup_price = df_sup.sort_values("Price").reset_index(drop=True)
     df_dem_price = df_dem.sort_values("Price").reset_index(drop=True)
 
-    # Build price->volume functions
-    price2vol_sup = lambda P: np.interp(
-        P, df_sup_price["Price"], df_sup_price["Volume"]
-    )
-    price2vol_dem = lambda P: np.interp(
-        P, df_dem_price["Price"], df_dem_price["Volume"]
-    )
-
     # Compute key volumes
-    q0 = price2vol_sup(P_auction)  # original clearing volume from supply side
-    DEM_inelastic = price2vol_dem(P_min)  # inelastic demand volume at floor price
-
-    # Define transformed supply S_trans(P) returning volume
-    def S_trans(P):
-        return price2vol_sup(P) + DEM_inelastic - price2vol_dem(P)
+    q0 = price2vol_sup(P_auction, df_sup_price.copy())  # original clearing volume from supply side
+    DEM_inelastic = price2vol_dem(P_min, df_dem_price.copy())  # inelastic demand volume at floor price
 
     q_implied = S_trans(
-        P_clearing
+        P_clearing, df_sup_price.copy(), DEM_inelastic, df_dem_price.copy()
     )  # implied volume corresponding to the last known continuous market price (naive)
 
     # Build inversion arrays from breakpoints
@@ -74,7 +67,7 @@ def compute_transformed_supply_elasticity(
 
     # Compute transformed volumes at each price
     V_vals = np.array(
-        [price2vol_sup(P) + DEM_inelastic - price2vol_dem(P) for P in P_vals]
+        [price2vol_sup(P, df_sup_price.copy()) + DEM_inelastic - price2vol_dem(P, df_dem_price.copy()) for P in P_vals]
     )
 
     # Sort by volume to ensure monotonicity
@@ -83,233 +76,51 @@ def compute_transformed_supply_elasticity(
     P_sorted = P_vals[idx]
 
     # Now invert: given z, find P via interpolation on (V_sorted, P_sorted)
-    def sup_trans_inv(z):
-        return np.interp(z, V_sorted, P_sorted)
+    # Slope segment around q0
+    P_plus = sup_trans_inv(q_implied + volume_delta, V_sorted.copy(), P_sorted.copy())
+    P_minus = sup_trans_inv(q_implied - volume_delta, V_sorted.copy(), P_sorted.copy())
 
-    # (c) Slope segment around q0
-    P_plus = sup_trans_inv(q_implied + q)
-    P_minus = sup_trans_inv(q_implied - q)
-
-    # 8) Compute elasticity: dP/dz ≈ (P_plus - P_minus)/(2*q)
-    elasticity = (P_plus - P_minus) / (2 * q)
+    # Compute elasticity: dP/dz ≈ (P_plus - P_minus)/(2*volume_delta)
+    elasticity = (P_plus - P_minus) / (2 * volume_delta)
 
     if DEVEL_PLOTS:
-        # Create subplot figure
-        fig = make_subplots(
-            rows=1,
-            cols=3,
-            subplot_titles=[
-                "(a) Original curves",
-                "(b) Transformed curves",
-                "(c) Slope coefficient",
-            ],
+        devel_elasticities_plot(
+            df_sup_price=df_sup_price.copy(deep=True),
+            df_dem_price=df_dem_price.copy(deep=True),
+            P_auction=P_auction,
+            P_minus=P_minus,
+            P_clearing=P_clearing,
+            P_plus=P_plus,
+            q0=q0,
+            volume_delta=volume_delta,
+            V_sorted=V_sorted,
+            P_sorted=P_sorted,
+            q_implied=q_implied,
+            DEM_inelastic=DEM_inelastic,
         )
-
-        # -----------------------------------------------------------
-        # (a) Original inverse curves
-        # -----------------------------------------------------------
-        fig.add_trace(
-            go.Scatter(
-                x=df_sup_price["Volume"],
-                y=df_sup_price["Price"],
-                mode="lines",
-                name="SUP_WS",
-                line=dict(color="blue"),
-            ),
-            row=1,
-            col=1,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=df_dem_price["Volume"],
-                y=df_dem_price["Price"],
-                mode="lines",
-                name="DEM_WS",
-                line=dict(color="red"),
-            ),
-            row=1,
-            col=1,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=[min(df_sup_price["Volume"]), max(df_sup_price["Volume"])],
-                y=[P_auction, P_auction],
-                mode="lines",
-                line=dict(color="gray", dash="dash"),
-                showlegend=False,
-            ),
-            row=1,
-            col=1,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=[q0],
-                y=[P_auction],
-                mode="markers",
-                marker=dict(color="black", size=8),
-                name="Auction clearing point",
-            ),
-            row=1,
-            col=1,
-        )
-
-        fig.update_xaxes(title="Volume [MWh]", row=1, col=1)
-        fig.update_yaxes(title="Price [€]", row=1, col=1)
-
-        # -----------------------------------------------------------
-        # (b) Transformed supply + inelastic demand
-        # -----------------------------------------------------------
-        fig.add_trace(
-            go.Scatter(
-                x=V_sorted,
-                y=P_sorted,
-                mode="lines",
-                name="Transformed supply",
-                line=dict(color="blue"),
-            ),
-            row=1,
-            col=2,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=[DEM_inelastic, DEM_inelastic],
-                y=[min(P_sorted), max(P_sorted)],
-                mode="lines",
-                line=dict(color="red", dash="dash"),
-                name="DEM_inelastic",
-            ),
-            row=1,
-            col=2,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=[min(V_sorted), max(V_sorted)],
-                y=[P_auction, P_auction],
-                mode="lines",
-                line=dict(color="gray", dash="dash"),
-                showlegend=False,
-            ),
-            row=1,
-            col=2,
-        )
-
-        fig.update_xaxes(title="Volume [MWh]", row=1, col=2)
-        fig.update_yaxes(title="Price [€]", row=1, col=2)
-
-        # -----------------------------------------------------------
-        # (c) Slope segment around q0
-        # -----------------------------------------------------------
-        fig.add_trace(
-            go.Scatter(
-                x=V_sorted,
-                y=P_sorted,
-                mode="lines",
-                name="Transformed supply",
-                line=dict(color="blue"),
-            ),
-            row=1,
-            col=3,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=[q_implied - q, q_implied + q],
-                y=[P_minus, P_plus],
-                mode="lines",
-                name=f"Slope segment Δ={q}",
-                line=dict(color="green"),
-            ),
-            row=1,
-            col=3,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=[q_implied - q, q_implied, q_implied + q],
-                y=[P_minus, P_clearing, P_plus],
-                mode="markers",
-                marker=dict(color="black", size=8),
-                name="Slope points",
-            ),
-            row=1,
-            col=3,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=[min(V_sorted), max(V_sorted)],
-                y=[P_auction, P_auction],
-                mode="lines",
-                line=dict(color="gray", dash="dash"),
-                showlegend=False,
-            ),
-            row=1,
-            col=3,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=[q_implied, q_implied],
-                y=[min(P_sorted), max(P_sorted)],
-                mode="lines",
-                line=dict(color="gray", dash="dash"),
-                showlegend=False,
-            ),
-            row=1,
-            col=3,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=[DEM_inelastic, DEM_inelastic],
-                y=[min(P_sorted), max(P_sorted)],
-                mode="lines",
-                line=dict(color="red", dash="dash"),
-                name="DEM_inelastic",
-            ),
-            row=1,
-            col=3,
-        )
-
-        fig.update_xaxes(title="Volume [MWh]", row=1, col=3)
-        fig.update_yaxes(title="Price [€]", row=1, col=3)
-
-        # -----------------------------------------------------------
-        # Layout
-        # -----------------------------------------------------------
-        fig.update_layout(showlegend=True, title="Supply/Demand Curve Transformations")
-
-        fig.show()
 
     return elasticity
 
 
-forecasting_horizon = 31  # 31 5min intervals before the delivery
-
 first_training_date = required_start
 last_forecasting_date = required_end - timedelta(days=1)
 
-for delivery_time in tqdm(range(96)):
+for delivery_time in tqdm(range(deliveries_no)):
     last_trade_time = (
         delivery_time * 3 + 8 * 12 - 6
     )  # 8*12 is 8 hours each containing 12 5min periods, -6 as we are trading up to 30min before the delivery
 
     information_shift = forecasting_horizon + 1
 
-    first_trade_time = last_trade_time - information_shift
+    first_trade_time = last_trade_time - information_shift # absolute index of the first step in the path
 
     con = sqlite3.connect(MARKET_DATA_DIR)
-    sql_str = f"SELECT * FROM with_dummies WHERE Index_daily <= {last_trade_time} AND Time >= '2018-12-31 16:00:00' AND Day >= 61;"  # load only the data required for simu, so up to trade time
+    sql_str = f"SELECT * FROM with_dummies WHERE Index_daily <= {last_trade_time} AND Time >= '{first_trading_start_of_simulation}' AND Day >= {first_day_index_of_simulation};"  # load only the data required for simu, so up to trade time
     daily_data = pd.read_sql(sql_str, con)[
-        [str(i) for i in range(192)] + ["288"]
+        needed_columns_of_continuous_preprocessed_data
     ].to_numpy()  # column 288 contains weekday no. indicators
     daily_data = np.reshape(
-        daily_data, (np.shape(daily_data)[0] // last_trade_time, last_trade_time, 193)
+        daily_data, (np.shape(daily_data)[0] // last_trade_time, last_trade_time, total_no_of_cont_market_columns)
     )
 
     last_known_id_prices = daily_data[:, -information_shift, delivery_time]
@@ -323,7 +134,7 @@ for delivery_time in tqdm(range(96)):
         pd.date_range(first_training_date, last_forecasting_date)
     ):
         naive_datetime = (forecasting_date - timedelta(days=1)).replace(
-            hour=16
+            hour=trading_start_hour
         ) + timedelta(minutes=5 * first_trade_time)
         actual_datetimes.append(naive_datetime)
 
@@ -379,11 +190,7 @@ for delivery_time in tqdm(range(96)):
         ]["price"].values[0]
 
         all_volume_shifts = []
-        for volume_delta in [
-            500,
-            1000,
-            2000,
-        ]:  # volume deltas to calculate the slope between
+        for volume_delta in VOLUME_DELTAS:  # volume deltas to calculate the slope between
             all_volume_shifts.append(
                 compute_transformed_supply_elasticity(
                     df,
@@ -391,7 +198,7 @@ for delivery_time in tqdm(range(96)):
                     ID_price,
                     volume_delta,
                     forecasting_date,
-                    P_min=-3000,
+                    P_min=LOWER_TECHNICAL_MINIMUM,
                 )
             )
 
