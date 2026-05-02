@@ -30,7 +30,7 @@ BORDER_CTYS = [
 ]  # DE and all the borders of DE
 
 START_YEAR = 2018
-END_YEAR = 2021 # 2020+1 for range() in python
+END_YEAR = 2021  # 2020+1 for range() in python
 
 ###################################################################################
 print("Processing the hourly border and DE d-a price data...")
@@ -51,7 +51,9 @@ for cty in BORDER_CTYS:
         df.rename(columns={da_column: cty}, inplace=True)
         df = df[[cty]]
 
-        df.index = parse_mtu_index(df.index, verbose=VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS)
+        df.index = parse_mtu_index(
+            df.index, verbose=VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS
+        )
 
         da_price.append(df[[cty]])
 
@@ -151,9 +153,9 @@ for year in range(START_YEAR, END_YEAR):
     file_path = os.path.join(
         DATA_DIR,
         "ID_auction_preprocessed",
-        f"intraday_auction_spot_prices_15-call-DE_{year}.csv"
+        f"intraday_auction_spot_prices_15-call-DE_{year}.csv",
     )
-    
+
     df = pd.read_csv(
         file_path,
         skiprows=1,
@@ -161,7 +163,7 @@ for year in range(START_YEAR, END_YEAR):
         parse_dates=True,
         dayfirst=True,
     )
-    
+
     dfs.append(df)
 total_df = pd.concat(dfs).iloc[:, :-8]
 
@@ -177,12 +179,11 @@ for idx in total_df.index:
         )
     )
 df = fill_march_dst(pd.concat(new_df).sort_index(), col="price")
-df.to_csv(os.path.join(
-        DATA_DIR,
-        "ID_auction_preprocessed",
-        "ID_auction_price_2018-2020_preproc.csv"
+df.to_csv(
+    os.path.join(
+        DATA_DIR, "ID_auction_preprocessed", "ID_auction_price_2018-2020_preproc.csv"
     )
-    )
+)
 
 check_for_missing_data(df, required_start, required_end, freq="15min")
 
@@ -218,7 +219,9 @@ for cty in BORDER_CTYS:
 
         df = (df[f"{cty}_import"] - df[f"{cty}_export"]).to_frame(name=cty)
 
-        df.index = parse_mtu_index(df.index, verbose=VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS)
+        df.index = parse_mtu_index(
+            df.index, verbose=VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS
+        )
 
         exchange.append(df)
 
@@ -271,8 +274,12 @@ for cty in BORDER_CTYS:
             inplace=True,
         )
 
-        df = (df[f"{cty}_import"] - df[f"{cty}_export"]).to_frame(name=cty) # sum up the import and export in each delivery to get the net value
-        df.index = parse_mtu_index(df.index, verbose=VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS)
+        df = (df[f"{cty}_import"] - df[f"{cty}_export"]).to_frame(
+            name=cty
+        )  # sum up the import and export in each delivery to get the net value
+        df.index = parse_mtu_index(
+            df.index, verbose=VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS
+        )
 
         exchange.append(df)
 

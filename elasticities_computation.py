@@ -10,17 +10,35 @@ from config.test_calibration_validation import (
     required_start,
     required_end,
 )
-from config.forecasting_simulation_config import deliveries_no, forecasting_horizon, trading_start_hour, first_trading_start_of_simulation, first_day_index_of_simulation, needed_columns_of_continuous_preprocessed_data, total_no_of_cont_market_columns
+from config.forecasting_simulation_config import (
+    deliveries_no,
+    forecasting_horizon,
+    trading_start_hour,
+    first_trading_start_of_simulation,
+    first_day_index_of_simulation,
+    needed_columns_of_continuous_preprocessed_data,
+    total_no_of_cont_market_columns,
+    last_trade_time_in_path_delta,
+)
 
-from utils import fill_march_dst_daily, check_for_missing_data, devel_elasticities_plot, price2vol_sup, price2vol_dem, sup_trans_inv, S_trans
+from utils import (
+    fill_march_dst_daily,
+    check_for_missing_data,
+    devel_elasticities_plot,
+    price2vol_sup,
+    price2vol_dem,
+    sup_trans_inv,
+    S_trans,
+)
 
-DEVEL_PLOTS = True
+DEVEL_PLOTS = False
 VOLUME_DELTAS = [
     500,
     1000,
     2000,
 ]
 LOWER_TECHNICAL_MINIMUM = -3000
+
 
 def compute_transformed_supply_elasticity(
     df_curve,
@@ -52,8 +70,12 @@ def compute_transformed_supply_elasticity(
     df_dem_price = df_dem.sort_values("Price").reset_index(drop=True)
 
     # Compute key volumes
-    q0 = price2vol_sup(P_auction, df_sup_price.copy())  # original clearing volume from supply side
-    DEM_inelastic = price2vol_dem(P_min, df_dem_price.copy())  # inelastic demand volume at floor price
+    q0 = price2vol_sup(
+        P_auction, df_sup_price.copy()
+    )  # original clearing volume from supply side
+    DEM_inelastic = price2vol_dem(
+        P_min, df_dem_price.copy()
+    )  # inelastic demand volume at floor price
 
     q_implied = S_trans(
         P_clearing, df_sup_price.copy(), DEM_inelastic, df_dem_price.copy()
@@ -67,7 +89,12 @@ def compute_transformed_supply_elasticity(
 
     # Compute transformed volumes at each price
     V_vals = np.array(
-        [price2vol_sup(P, df_sup_price.copy()) + DEM_inelastic - price2vol_dem(P, df_dem_price.copy()) for P in P_vals]
+        [
+            price2vol_sup(P, df_sup_price.copy())
+            + DEM_inelastic
+            - price2vol_dem(P, df_dem_price.copy())
+            for P in P_vals
+        ]
     )
 
     # Sort by volume to ensure monotonicity
@@ -107,12 +134,14 @@ last_forecasting_date = required_end - timedelta(days=1)
 
 for delivery_time in tqdm(range(deliveries_no)):
     last_trade_time = (
-        delivery_time * 3 + 8 * 12 - 6
+        delivery_time * 3 + last_trade_time_in_path_delta
     )  # 8*12 is 8 hours each containing 12 5min periods, -6 as we are trading up to 30min before the delivery
 
     information_shift = forecasting_horizon + 1
 
-    first_trade_time = last_trade_time - information_shift # absolute index of the first step in the path
+    first_trade_time = (
+        last_trade_time - information_shift
+    )  # absolute index of the first step in the path
 
     con = sqlite3.connect(MARKET_DATA_DIR)
     sql_str = f"SELECT * FROM with_dummies WHERE Index_daily <= {last_trade_time} AND Time >= '{first_trading_start_of_simulation}' AND Day >= {first_day_index_of_simulation};"  # load only the data required for simu, so up to trade time
@@ -120,7 +149,12 @@ for delivery_time in tqdm(range(deliveries_no)):
         needed_columns_of_continuous_preprocessed_data
     ].to_numpy()  # column 288 contains weekday no. indicators
     daily_data = np.reshape(
-        daily_data, (np.shape(daily_data)[0] // last_trade_time, last_trade_time, total_no_of_cont_market_columns)
+        daily_data,
+        (
+            np.shape(daily_data)[0] // last_trade_time,
+            last_trade_time,
+            total_no_of_cont_market_columns,
+        ),
     )
 
     last_known_id_prices = daily_data[:, -information_shift, delivery_time]
@@ -190,7 +224,9 @@ for delivery_time in tqdm(range(deliveries_no)):
         ]["price"].values[0]
 
         all_volume_shifts = []
-        for volume_delta in VOLUME_DELTAS:  # volume deltas to calculate the slope between
+        for (
+            volume_delta
+        ) in VOLUME_DELTAS:  # volume deltas to calculate the slope between
             all_volume_shifts.append(
                 compute_transformed_supply_elasticity(
                     df,
