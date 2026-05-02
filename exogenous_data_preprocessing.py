@@ -10,11 +10,11 @@ from config.test_calibration_validation import (
     required_end,
     currency_change_date_PL,
 )
-from utils import fill_march_dst, check_for_missing_data
+from utils import fill_march_dst, check_for_missing_data, parse_mtu_index
 
 VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS = False
 
-border_ctys = [
+BORDER_CTYS = [
     "DE",
     "AT",
     "BE",
@@ -29,14 +29,17 @@ border_ctys = [
     "SE4",
 ]  # DE and all the borders of DE
 
+START_YEAR = 2018
+END_YEAR = 2021 # 2020+1 for range() in python
+
 ###################################################################################
 print("Processing the hourly border and DE d-a price data...")
 
 all_ctys_dfs = []
 
-for cty in border_ctys:
+for cty in BORDER_CTYS:
     da_price = []
-    for year in range(2018, 2021):
+    for year in range(START_YEAR, END_YEAR):
         df = pd.read_csv(
             os.path.join(DATA_DIR, "Day-Ahead-Quarterly-Data", f"DA_{cty}_{year}.csv"),
             na_values=["n/e"],
@@ -48,25 +51,7 @@ for cty in border_ctys:
         df.rename(columns={da_column: cty}, inplace=True)
         df = df[[cty]]
 
-        new_datetimes = []
-        for dat in df.index:
-            new_datetimes.append(dat.split(" - ")[0])
-
-        try:
-            df.index = pd.to_datetime(
-                new_datetimes,
-                format="%d/%m/%Y %H:%M:%S",
-                dayfirst=False,
-                yearfirst=False,
-            )
-        except Exception as err:
-            if VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS:
-                print(
-                    f"Exception: {err}. Failed to format the index as datetime using %d/%m/%Y %H:%M:%S;\ntrying %d.%m.%Y %H:%M instead."
-                )
-            df.index = pd.to_datetime(
-                new_datetimes, format="%d.%m.%Y %H:%M", dayfirst=False, yearfirst=False
-            )
+        df.index = parse_mtu_index(df.index, verbose=VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS)
 
         da_price.append(df[[cty]])
 
@@ -125,7 +110,7 @@ print("Processing the q-hrly DE day-ahead prices...")
 
 cty = "DE"
 da_price = []
-for year in range(2018, 2021):
+for year in range(START_YEAR, END_YEAR):
     df = pd.read_csv(
         os.path.join(DATA_DIR, "Day-Ahead-Quarterly-Data", f"DA_{cty}_Q_{year}.csv"),
         na_values=["n/e"],
@@ -137,22 +122,7 @@ for year in range(2018, 2021):
     df.rename(columns={da_column: cty}, inplace=True)
     df = df[[cty]]
 
-    new_datetimes = []
-    for dat in df.index:
-        new_datetimes.append(dat.split(" - ")[0])
-
-    try:
-        df.index = pd.to_datetime(
-            new_datetimes, format="%d/%m/%Y %H:%M:%S", dayfirst=False, yearfirst=False
-        )
-    except Exception as err:
-        if VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS:
-            print(
-                f"Exception: {err}. Failed to format the index as datetime using %d/%m/%Y %H:%M:%S;\ntrying %d.%m.%Y %H:%M instead."
-            )
-        df.index = pd.to_datetime(
-            new_datetimes, format="%d.%m.%Y %H:%M", dayfirst=False, yearfirst=False
-        )
+    df.index = parse_mtu_index(df.index, verbose=VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS)
 
     da_price.append(df[[cty]])
 
@@ -175,31 +145,26 @@ check_for_missing_data(
 
 ###################################################################################
 print("Processing the intraday auction data...")
-total_df = pd.concat(
-    [
-        pd.read_csv(
-            "Data/ID_auction_preprocessed/intraday_auction_spot_prices_15-call-DE_2018.csv",
-            skiprows=1,
-            index_col=0,
-            parse_dates=True,
-            dayfirst=True,
-        ),
-        pd.read_csv(
-            "Data/ID_auction_preprocessed/intraday_auction_spot_prices_15-call-DE_2019.csv",
-            skiprows=1,
-            index_col=0,
-            parse_dates=True,
-            dayfirst=True,
-        ),
-        pd.read_csv(
-            "Data/ID_auction_preprocessed/intraday_auction_spot_prices_15-call-DE_2020.csv",
-            skiprows=1,
-            index_col=0,
-            parse_dates=True,
-            dayfirst=True,
-        ),
-    ]
-).iloc[:, :-8]
+
+dfs = []
+for year in range(START_YEAR, END_YEAR):
+    file_path = os.path.join(
+        DATA_DIR,
+        "ID_auction_preprocessed",
+        f"intraday_auction_spot_prices_15-call-DE_{year}.csv"
+    )
+    
+    df = pd.read_csv(
+        file_path,
+        skiprows=1,
+        index_col=0,
+        parse_dates=True,
+        dayfirst=True,
+    )
+    
+    dfs.append(df)
+total_df = pd.concat(dfs).iloc[:, :-8]
+
 # drop the B set of DST deliveries
 total_df = total_df[[c for c in total_df.columns if "Hour 3B" not in c]]
 new_df = []
@@ -212,7 +177,12 @@ for idx in total_df.index:
         )
     )
 df = fill_march_dst(pd.concat(new_df).sort_index(), col="price")
-df.to_csv("Data/ID_auction_preprocessed/ID_auction_price_2018-2020_preproc.csv")
+df.to_csv(os.path.join(
+        DATA_DIR,
+        "ID_auction_preprocessed",
+        "ID_auction_price_2018-2020_preproc.csv"
+    )
+    )
 
 check_for_missing_data(df, required_start, required_end, freq="15min")
 
@@ -220,12 +190,12 @@ check_for_missing_data(df, required_start, required_end, freq="15min")
 print("Processing the hourly physical exchange data...")
 
 all_ctys_exchange = []
-for cty in border_ctys:
+for cty in BORDER_CTYS:
     if cty == "DE":
         continue
 
     exchange = []
-    for year in range(2018, 2021):
+    for year in range(START_YEAR, END_YEAR):
         df = pd.read_csv(
             os.path.join(
                 DATA_DIR, "Crossborder", f"crossborder_de_{cty.lower()}_{year}.csv"
@@ -248,25 +218,7 @@ for cty in border_ctys:
 
         df = (df[f"{cty}_import"] - df[f"{cty}_export"]).to_frame(name=cty)
 
-        new_datetimes = []
-        for dat in df.index:
-            new_datetimes.append(dat.split(" - ")[0])
-
-        try:
-            df.index = pd.to_datetime(
-                new_datetimes,
-                format="%d/%m/%Y %H:%M:%S",
-                dayfirst=False,
-                yearfirst=False,
-            )
-        except Exception as err:
-            if VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS:
-                print(
-                    f"Exception: {err}. Failed to format the index as datetime using %d/%m/%Y %H:%M:%S;\ntrying %d.%m.%Y %H:%M instead."
-                )
-            df.index = pd.to_datetime(
-                new_datetimes, format="%d.%m.%Y %H:%M", dayfirst=False, yearfirst=False
-            )
+        df.index = parse_mtu_index(df.index, verbose=VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS)
 
         exchange.append(df)
 
@@ -293,12 +245,12 @@ check_for_missing_data(all_de_border_exchanges, required_start, required_end, fr
 print("Processing the hourly commercial scheduled exchange data...")
 
 all_ctys_exchange = []
-for cty in border_ctys:
+for cty in BORDER_CTYS:
     if cty in ["DE", "BE", "NO2"]:
         continue
 
     exchange = []
-    for year in range(2018, 2021):
+    for year in range(START_YEAR, END_YEAR):
         df = pd.read_csv(
             os.path.join(
                 DATA_DIR, "Crossborder", f"commex_de_{cty.lower()}_{year}.csv"
@@ -319,27 +271,8 @@ for cty in border_ctys:
             inplace=True,
         )
 
-        df = (df[f"{cty}_import"] - df[f"{cty}_export"]).to_frame(name=cty)
-
-        new_datetimes = []
-        for dat in df.index:
-            new_datetimes.append(dat.split(" - ")[0])
-
-        try:
-            df.index = pd.to_datetime(
-                new_datetimes,
-                format="%d/%m/%Y %H:%M:%S",
-                dayfirst=False,
-                yearfirst=False,
-            )
-        except Exception as err:
-            if VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS:
-                print(
-                    f"Exception: {err}. Failed to format the index as datetime using %d/%m/%Y %H:%M:%S;\ntrying %d.%m.%Y %H:%M instead."
-                )
-            df.index = pd.to_datetime(
-                new_datetimes, format="%d.%m.%Y %H:%M", dayfirst=False, yearfirst=False
-            )
+        df = (df[f"{cty}_import"] - df[f"{cty}_export"]).to_frame(name=cty) # sum up the import and export in each delivery to get the net value
+        df.index = parse_mtu_index(df.index, verbose=VERBOSE_TIMESTAMP_FORMAT_EXCEPTIONS)
 
         exchange.append(df)
 
@@ -363,7 +296,7 @@ check_for_missing_data(all_de_border_exchanges, required_start, required_end, fr
 ###################################################################################
 print("Processing the load data...")
 load = []
-for year in range(2018, 2021):
+for year in range(START_YEAR, END_YEAR):
     load.append(
         pd.read_csv(
             os.path.join(
@@ -393,14 +326,14 @@ load_df.drop(columns="Time from", inplace=True)
 # remove October dst change impact
 load_df = fill_march_dst(load_df[~load_df.index.duplicated()], col="Actual")
 
-load_df.to_csv("Data/Load/Load_2018-2020.csv")
+load_df.to_csv(os.path.join(DATA_DIR, "Load", "Load_2018-2020.csv"))
 
 check_for_missing_data(load_df, required_start, required_end, freq="15min")
 
 ###################################################################################
 print("Processing the generation data...")
 gen = []
-for year in range(2018, 2021):
+for year in range(START_YEAR, END_YEAR):
     gen.append(
         pd.read_csv(
             os.path.join(DATA_DIR, "Generation", f"generation_{year}.csv"),
@@ -434,7 +367,7 @@ gen_df.index = pd.to_datetime(gen_df["Time from"])
 gen_df.drop(columns="Time from", inplace=True)
 
 gen_fore = []
-for year in range(2018, 2021):
+for year in range(START_YEAR, END_YEAR):
     gen_fore.append(
         pd.read_csv(
             os.path.join(DATA_DIR, "Generation", f"generation_fore_{year}.csv"),
@@ -481,4 +414,4 @@ gen_df = fill_march_dst(gen_df[~gen_df.index.duplicated()], col="SPV")
 
 check_for_missing_data(gen_df, required_start, required_end, freq="15min")
 
-gen_df.to_csv("Data/Generation/Generation_2018-2020.csv")
+gen_df.to_csv(os.path.join(DATA_DIR, "Generation", "Generation_2018-2020.csv"))
